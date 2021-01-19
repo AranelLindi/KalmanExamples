@@ -1,0 +1,398 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+
+\usepackage{subfig} % Grafiken nebeneinander
+
+\usepackage{enumitem} % Ermöglicht Aufzählungsanzeiger fett zu schreiben (zusätzlich bei Aufzählung deklarieren!)
+
+\usepackage{xcolor} % Einfärbung Schlüsselwörter in Code
+\usepackage{svg} % Hinzufügen von SVG Vektorgrafiken
+\usepackage{listings, lstautogobble} % Für Code-Ausschnitte
+\usepackage[a4paper,top=2.50cm,bottom=2cm,left=2.80cm,right=2.80cm]{geometry}
+
+\definecolor{RoyalBlue}{cmyk}{1, 0.50, 0, 0} % Farbliche Definition für Code-Schlüsselwörter
+
+\lstset{language=Matlab, keywordstyle=\color{RoyalBlue}, basicstyle=\scriptsize\ttfamily, commentstyle=\ttfamily\itshape\color{gray}, stringstyle=\ttfamily, showstringspaces=false, breaklines=true, frameround=ffff, frame=single, rulecolor=\color{black}, autogobble=true}
+
+\begin{document}
+	\title{Übungsaufgabe in Luft- und Raumfahrtlabor\\Kalman Filter Übung 2}
+	\author{Stefan Lindörfer}
+	\maketitle{}
+Einführende Übung zum Kalmanfilter mit einem eindimensionalen Beispiel. Ausführlich aufbereitet um auch als Anleitung/Nachschlagewerk verwendet werden zu können.
+	\begin{enumerate}[label=\textbf{\arabic*})] % Aufzählungssymbol fett
+		\item \textbf{Aufgabe:}\label{sub:Aufgabe1}\\
+		
+		\begin{enumerate}[label=\textbf{\alph*})] % Aufzählungssymbol fett
+			\item \textbf{System Design}\label{subsec:Task1a}\\
+			Es gilt, die Zustandsmatrix $F$ zu finden, sodass die Gleichung
+			\begin{equation}\label{eq:Ausgangsgleichung}
+				\vec{x}(k+1)=F\cdot \vec{x}(k)
+			\end{equation}
+			den Zustandsraum $\vec{x}$, bestehend aus dem Gleichungssystem		
+			\begin{align}
+				h(k+1)&=h(k)+\Delta t\cdot v(k) + \dfrac{1}{2}\Delta t^{2}\cdot a(k)\label{eq:Hoehe}\\
+				v(k+1)&=v(k)+\Delta t\cdot a(k)\label{eq:Geschwindigkeit}\\
+				a(k+1)&=a(k)\label{eq:Beschleunigung}
+			\end{align}
+			
+			
+    		korrekt abbildet. Für den Zustandsraum $\vec{x}$ gilt somit:
+    		\begin{equation}\label{eq:Zustandsraum}
+				\vec{x}(k)=
+				\begin{pmatrix}
+					h(k)\\
+					v(k)\\
+					a(k)
+				\end{pmatrix}
+    		\end{equation}
+    		Die Zustandsmatrix $F$ muss also so gewählt werden, dass durch eine Matrix-Vektor-Multiplikation (Gl. \ref{eq:Ausgangsgleichung}) die oben genannte Gleichungen \ref{eq:Hoehe}, \ref{eq:Geschwindigkeit} und \ref{eq:Beschleunigung} der darauffolgenden Iteration entstehen. Damit ergibt sich für $F$:\\
+			\begin{equation}\label{eq:ZustandsmatrixF}
+			F =
+			\begin{pmatrix}
+				1 & \Delta t & \frac{1}{2}\Delta t^{2} \\
+				0 & 1 & \Delta t \\
+				0 & 0 & 1
+			\end{pmatrix}		
+			\end{equation}
+			
+			\item \textbf{Kalman Filter mit Beschleunigungssensor}\label{subsec:Task1b}\\
+			
+			Ein lineares Kalman Filter soll den Systemzustand eines Multikopters schätzen. Dabei wird lediglich eine Dimension (Höhe) betrachtet und der Zustandsraum (Gl. \ref{eq:Zustandsraum}) zugrunde gelegt.\\
+			
+			Zunächst soll ein geeigneter Startzustand $\vec{x}(0)$ gewählt werden. Sind keine Informationen über den Startzustand vorhanden, kann dies dem Filter ebenfalls mitgeteilt werden, in dem in das entsprechende Zustandsfeld $0$ eingetragen wird.\\
+			
+			Vermutlich startet ein UAV auf festem Untergrund, der als $0$ angenommen werden kann, aber auch jeder andere Wert würde hier grundsätzlich Sinn machen (Anfangshöhe), etwa falls von einem Tisch aus gestartet werden soll. Hier wird von einem Startpunkt am Boden ausgegangen. Damit wird $h(0) = 0$ festgelegt.\\
+			
+			Abhängig vom Startpunkt ist auch die Anfangsgeschwindigkeit $v(0)$ einzutragen. Da grundsätzlich die Bestimmung einer Momentangeschwindigkeit zu einem exakten Zeitpunkt problematisch ist, wird hier ebenfalls $0$ gewählt, zumal von einem festen Punkt gestartet wird und dort ebenfalls keine Anfangsgeschwindigkeit angenommen wird.\\
+			
+			Zuletzt ist die Beschleunigung $a(0)$ festzulegen. Es wird davon ausgegangen, dass zum Zeitpunkt $t_{0}$ bereits eine entsprechende Auftriebskraft besteht, sodass eine Beschleunigung von $0 \frac{m}{s^{2}}$ wirkt, das UAV also seine Lage nicht nach oben oder unten verändern würde.\\
+			
+			Damit wird der Startzeitpunkt $\vec{x}(k=0)=\begin{pmatrix}
+				0\\
+				0\\
+				0
+			\end{pmatrix}$
+			gesetzt.\\
+			
+			Als nächstes soll aus den Messdaten des Beschleunigungssensors der ersten 10 Sekunden, die Messrauschkovarianzmatrix $R_{accel}$ berechnet werden. Diese gibt Auskunft über die Streuung der Messwerte. Da die Frequenz des Sensors $f_{accel}=200~Hz$ beträgt, müssen so 2.000 Datensätze berücksichtigt werden. Die Problemstellung, wie $P$, $Q$ und $R_{x}$ zu bestimmen sind, wird auch in den Folien zur Übung aufgegriffen. Dort wird $R=\sigma^{2}_{accel}=var_{accel}$ gesetzt. Damit folgt:
+			\begin{equation}\label{eq:Messrauschkovarianzmatrix}
+				R_{accel}=0,1296~{(\frac{m}{s^{2}}})^{2}
+			\end{equation}
+			Da nur ein Sensor im Filterprozess zur Anwendung kommt, ist $R_{accel}$ eine $1\times1$-Matrix und kann als Skalar betrachtet werden.
+			
+			Außerdem ist die Vorhersagematrix $H_{accel}$ zu bestimmen. Diese gibt Auskunft darüber, was gemessen wird und in welchem Verhältnis es zum Zustandsvektor $\vec{x}(k)$ steht.\\
+			Gemessen wird die auf das UAV wirkende Beschleunigung in bekannten SI-Einheiten. Grundsätzlich muss berücksichtigt werden, dass der Sensor auch die Erdbeschleunigung misst, was später im Prozess (siehe Quellcode) noch berücksichtigt werden muss. Mit diesem Vorgehen lässt sich die Matrix aufstellen:
+			\begin{equation}\label{eq:Vorhersagematrix}
+				H_{accel}=\begin{pmatrix}
+				0 & 0 & 1
+				\end{pmatrix}	
+			\end{equation}
+			Die Messwerte wirken sich zuerst ausschließlich auf die Beschleunigung des Zustandsvektors aus ($1$ im Feld für Beschleunigung) und werden durch die Multiplikation des Zustandsraumes mit der Zustandsmatrix auch auf die anderen Eigenschaften Höhe und Geschwindigkeit übertragen. Diese Matrix besitzt eine Größe von $3\times1$, da drei Systemzustandswerte und ein Sensorinput in diesem Filterprozess existieren.\\
+			
+			Abschließend müssen noch die restliche Gleichungen des Kalman-Filters implementiert werden. Nachfolgend befindet sich der gesamte Vorgang ohne etwaige Matrizendeklarationen. Insgesamt ergibt sich damit folgender MATLAB-Quellcode:
+			\begin{lstlisting}
+				for ia = 1:length(y_accel) - 1 % Laenge der Messwerte
+					%% Vorhersage betreffend des Systemstatus
+					% Vorhersage System-Status:
+					x(:, ia + 1) = F * x(:, ia);
+					% Vorhersage Systemstatuskovarianz:
+					P = F * P * transpose(F) + Q;
+					
+					% Vorhersage Messungen:
+					z_accel = H_accel * x(:, ia + 1);
+					% Einfliessen der Messdaten:
+					v = (y_accel(ia) - 9.81) - z_accel; % Beruecksichtigung von g als Offset-Fehler
+					
+					% Innovationkovarianz:
+					S = (H_accel * P * transpose(H_accel)) + R_accel;
+					% Filter Gain (Kalman-Gain):
+					W = P * transpose(H_accel) * inv(S);
+					
+					% Systemzustand updaten:
+					x(:, ia + 1) = x(:, ia + 1) + (W * v);
+					% Kovarianzmatrix updaten:
+					P = (eye(3) - (W * H_accel)) * P;
+				end
+			\end{lstlisting}
+			Wird das Filter nun ausgeführt um den Systemzustand zu schätzen, ergeben sich für 100 Sekunden Laufzeit die folgenden graphischen Aussagen:\\
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.8]{Position.eps}
+				\caption{\label{fig:KalmanHoehe}Darstellung des zeitlichen Verlaufes der vertikalen Höhe des Multikopters}
+			\end{figure}
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.8]{Speed.eps}
+				\caption{\label{fig:KalmanGeschwindigkeit}Darstellung des zeitlichen Verlaufes der vertikalen Geschwindigkeit des Multikopters}
+			\end{figure}
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.8]{Accel.eps}
+				\caption{\label{fig:KalmanBeschleunigung}Darstellung des zeitlichen Verlaufes der vertikalen Beschleunigung des Multikopters}
+			\end{figure}
+		
+		Auffällig ist hierbei in Abbildung \ref{fig:KalmanHoehe} etwa, dass das Filter seine Höhe ab der Hälfte der Zeit um fast das Doppelte überschätzt. Auch der Geschwindigkeitsverlauf in Abbildung \ref{fig:KalmanGeschwindigkeit} weißt größere Differenzen mit dem wahren Wert auf. Dies könnte daran liegen, dass etwaige Fehler ebenfalls aufsummiert werden (und so immer größer werden) und das dem Filter nur eine Sensoreingabequelle in Form des Accelerometers zur Verfügung steht. Diese gibt ihm aber keine Auskunft über die tatsächlich erreichte Höhe. Hier muss sich bisher ausschließlich auf das mathematische Modell (Gl. \ref{eq:Hoehe}-\ref{eq:Beschleunigung}) verlassen werden.\\
+		
+		Um die Schätzung durch den Filter exakter zu gestalten, wird im folgenden ein vertikaler Abstandslaser (Lidar) als zusätzliche Messdateneingabe dem Filter zur Verfügung gestellt. Dieser gibt den vertikalen Abstand des Multikopters vom Nullpunkt an.\\
+		
+		Dafür ist zunächst -- wie auch beim Accelerometer -- die Vorhersagematrix $H_{lidar}$ zu bestimmen. Die Werte des Sensor werden in Zentimetern gespeichert, das Filter selbst rechnet jedoch bereits mit der Einheit Meter. Da die Vorhersagematrix auch das Verhältnis der Messwerte zum Zustandsvektor angibt, kann die Matrix wie folgt aufgestellt werden:
+		\begin{equation}\label{eq:Vorhersagematrix_lidar}
+			H_{accel}=
+				\begin{pmatrix}
+				100& 0 & 0
+				\end{pmatrix}
+		\end{equation}
+		Die Dimension der Matrix gleicht der von $H_{accel}$ -- es gibt drei Zustandsvariablen und nur eine Sensoreingabe. Die vom Lidar gemessene Höhe hat keine Auswirkungen auf die Beschleunigung oder die Geschwindigkeit, weswegen diese Felder eine $0$ enthalten. Sie kann teilweise auch als Regelungsgröße angesehen werden, da bisher aufgetretene Fehler durch Daten des Beschleunigungssensors so minimiert werden können. Da die rohen Messdaten des Lidars um das 100-fache größer ($cm$ in $m$) in das Filter gegeben werden, wird das Verhältnis des Zustandsvektors mit dem Faktor $100$ entsprechend angepasst.\\
+		
+		Die Messrauschkovarianzmatrix des Abstandslasers $R_{lider}$ wird mit den Messdaten des Lidars genauso bestimmt wie bereits zu Beginn mit dem Beschleunigungssensor, lediglich die verringerte Messfrequenz von $20~Hz$ muss berücksichtigt werden. Damit ergibt sich ein Wert von
+		\begin{equation}\label{eq:Messrauschkovarianzmatrix_Lidar}
+			R_{lidar}=0,2612~cm^{2}
+		\end{equation}\\
+		
+		Die weiteren zu implementierenden Gleichungen werden nach dem obigem Schema (MATLAB-Quellcode) vervollständigt. Dabei muss ebenfalls auf die verringerte Frequenz des Abstandslasers geachtet werden.\\
+		
+		Wird nun erneut eine Filterung durchgeführt, welche zusätzlich zum Beschleunigungssensor noch den Abstandslaser als Eingabequelle beinhaltet, werden folgende Grafiken gewonnen:\\
+		\begin{figure}[!ht]
+			\centering
+			\includegraphics[scale=0.8]{Position_Lidar.eps}
+			\caption{\label{fig:KalmanHoehe_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Höhe des Multikopters mit Eingabe des Abstandslasers}
+		\end{figure}
+		\begin{figure}[!ht]
+			\centering
+			\includegraphics[scale=0.8]{Speed_Lidar.eps}
+			\caption{\label{fig:KalmanGeschwindigkeit_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Geschwindigkeit des Multikopters mit Eingabe des Abstandslasers}
+		\end{figure}
+	
+		\item \textbf{Auswertung}\label{subsec:Auswertung}\\
+		
+		Sofort auffällig ist die Tatsache, dass das Filter, wie in Abbildung \ref{fig:KalmanHoehe_Lidar} ersichtlich, mit dem Abstandslaser als zusätzliche Orientierungsmöglichkeit, einen fast exakten Verlauf mit dem wahren Wert aufweist. Dies erreicht das Filter in Abbildung \ref{fig:KalmanHoehe} (wie bereits in Aufgabe \ref{subsec:Task1b} festegestellt) bei weitem nicht: Fehler werden dort aufsummiert und ergeben letztendlich fast die doppelte Höhe.\\
+		
+		Auch bei den beiden Abbildungen zur Geschwindigkeit (Abb. \ref{fig:KalmanGeschwindigkeit} und \ref{fig:KalmanGeschwindigkeit_Lidar}) lässt sich -- wenn auch in geringerem Maße -- eine solche Beobachtung feststellen. Hier weicht das Filter ohne Lidar, als zweite Sensoreingabequelle, vom wahren Wert in vergleichbarer Größenordnung ab. Auch eine langsamere Konvergenz zu diesem lässt sich ab der Hälfte der Zeit deutlich feststellen, währenddessen die zweite Version des Filters (siehe Abb. \ref{fig:KalmanGeschwindigkeit_Lidar}), ebenfalls -- mit leichtem Prozessrauschen zwar -- einen sehr konvergenten und dynamischen Verlauf um die Soll-Geschwindigkeit nimmt.\\
+		
+		Auf die Beschleunigung hat das Hinzunehmen des Abstandslasers jedoch keine erkennbaren Auswirkungen, die entsprechende Grafik ist augenscheinlich identisch mit Abbildung \ref{fig:KalmanBeschleunigung}, was auch dadurch erklärt werden könnte, dass die Beschleunigung als erstes durch die Zustandsgleichung (Gl. \ref{eq:Beschleunigung}) Einfluss auf das Filter bzw. dem zugrundeliegendem Zustandsraum (Gl. \ref{eq:Zustandsraum}) erhält und kein unmittelbarer Zusammenhang mit dem Abstandslaser besteht.\\
+		
+		Im folgenden werden nun die Werte der drei Matrizen $R_{lidar}$, $R_{accel}$ und $Q$ variiert, um Auswirkungen davon sichtbar zu machen, zu untersuchen und miteinander zu vergleichen sowie ein grobes Einflussverhalten der Matrizen abzuleiten. Dazu werden die Werte einmal sehr hoch ($>10^{6}$) und einmal sehr niedrig ($<10^{-6}$) gewählt -- die anderen Matrizen jeweils in ihren ursprünglichen Werten beibehalten --, um so eindeutige Unterschiede im Verhalten des Filterprozesses sichtbar zu machen. Tabelle \ref{tab:ErgebnisseVergleich} fasst grob die Unterschiede zusammen.
+		\begin{table}[!ht]
+	\scriptsize
+	\centering
+	\def\arraystretch{2}
+	\setlength{\tabcolsep}{1em}
+	\begin{tabular}{|l|c|c|c|}
+		\hline
+		\rule[-1ex]{0pt}{2.5ex}  & \textbf{Höhe} & \textbf{Geschwindigkeit} & \textbf{Beschleunigung} \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $R_{lidar}\rightarrow10^{6}$ & leichtes Übersteuern (s Abb. \ref{subfig:Pos_Rlidar_HIGH}) & Dynamisch (s. Abb. \ref{subfig:Speed_Rlidar_HIGH}) & Unverändert (s. Abb. \ref{fig:KalmanBeschleunigung}) \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $R_{lidar}\rightarrow10^{-6}$ & Unverändert (s. Abb. \ref{fig:KalmanHoehe}) & Rauschen (s. Abb. \ref{subfig:Speed_Rlidar_LOW}) & Rauschen (s. Abb. \ref{subfig:Accel_Rlidar_LOW}) \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $R_{accel}\rightarrow10^{6}$ & Unverändert (s. Abb. \ref{fig:KalmanHoehe}) & Rauschen (s. Abb. \ref{subfig:Speed_Raccel_HIGH}) & Rauschen (s. Abb. \ref{subfig:Accel_Raccel_HIGH}) \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $R_{accel}\rightarrow10^{-6}$ & leichtes Übersteuern (s. Abb. \ref{subfig:Pos_Raccel_LOW}) & Dynamisch (s. Abb. \ref{subfig:Speed_Raccel_LOW}) & Unverändert (s. Abb. \ref{fig:KalmanBeschleunigung}) \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $Q\rightarrow10^{6}$ & Unverändert (s. Abb. \ref{fig:KalmanHoehe}) & Dynamisch (s. Abb. \ref{subfig:Speed_Q_HIGH}) & Rauschen (s. Abb. \ref{subfig:Accel_Q_HIGH}) \\
+		\hline
+		\rule[-1ex]{0pt}{2.5ex} $Q\rightarrow10^{-6}$ & Unverändert (s. Abb. \ref{fig:KalmanHoehe}) & Glättung (s. Abb. \ref{subfig:Speed_Q_LOW}) & Glättung (s. Abb. \ref{subfig:Accel_Q_LOW}) \\
+		\hline
+		\end{tabular}
+		\normalsize
+		\caption{\label{tab:ErgebnisseVergleich}Zusammenfassung d. Ergebnisse der Variation der Matrizenwerte}
+		\end{table}
+		Die nachfolgenden Abbildung sollen die Veränderungen grafisch deutlich machen. Hierbei werden Grafiken nur angegeben, wenn durch die erfolgte Modifizierung des Filters ein auffälliger Unterschied zu den vorherigen Verläufen aus den Abbildungen \ref{fig:KalmanHoehe}-\ref{fig:KalmanBeschleunigung} bzw. \ref{fig:KalmanHoehe_Lidar} \& \ref{fig:KalmanGeschwindigkeit_Lidar} bemerkbar ist.\\
+		% Rlidar_HIGH
+		\begin{figure}[h]
+			\subfloat[Höhe\label{subfig:Pos_Rlidar_HIGH}]{
+				\includegraphics[scale=0.50]{Mod/Pos_Rlidar_HIGH.eps}
+			}
+				\hfill	
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Rlidar_HIGH}]{
+				\includegraphics[scale=0.50]{Mod/Speed_Rlidar_HIGH.eps}
+			}
+			\caption{Filterverhalten bei hohem $R_{lidar}$}
+			\label{fig:Rlidar_HIGH}
+		\end{figure}
+	
+		Wird der Wert der Messrauschkovarianzmatrix des Abstandslasers $R_{lidar}$ stark erhöht, wirkt sich dies neben geringfügig schlechteren Schätzenwerten der Höhe (Abb. \ref{subfig:Pos_Rlidar_HIGH}) und mehr Prozessrauschen auf Seiten der Geschwindigkeit (Abb. \ref{subfig:Speed_Rlidar_HIGH}) (worauf im nächsten Abschnitt näher eingegangen wird) scheinbar auch auf eine größere Trägheit des Filters aus: In geringem Ausmaß treten außerdem Überschwingungen auf und es erfordert deutlich mehr Zeit, wieder auf die wahren Werte zurückzukommen: Das Filter ist nicht mehr so dynamisch wie noch im Ausgangszustand. Dazu gesagt werden muss allerdings, dass die Werte ins unnormal hohe geändert wurden um so eine Reaktion zu provozieren und Änderungen in normalen Intervallen in diesem Fall keine solchen Auswirkungen zeigen dürften.\\
+		% Rlidar_LOW
+		\begin{figure}[h]
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Rlidar_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Speed_Rlidar_LOW.eps}
+			}
+				\hfill
+			\subfloat[Beschleunigung\label{subfig:Accel_Rlidar_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Accel_Rlidar_LOW.eps}
+			}
+			\caption{Filterverhalten bei niedrigem $R_{lidar}$}
+			\label{fig:Rlidar_LOW}
+		\end{figure}
+		% Raccel_HIGH
+		\begin{figure}[h]
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Raccel_HIGH}]{
+				\includegraphics[scale=0.5]{Mod/Speed_Raccel_HIGH.eps}
+			}
+			\subfloat[Beschleunigung\label{subfig:Accel_Raccel_HIGH}]{
+				\includegraphics[scale=0.5]{Mod/Accel_Raccel_HIGH.eps}
+			}
+			\caption{Filterverhalten bei hohem $R_{accel}$}
+			\label{fig:Raccel_HIGH}
+		\end{figure}
+	
+		Das bereits festgestellte Rauschen und leichte Überschwingen in Abbildung \ref{fig:Rlidar_HIGH}, wird auch im nächsten Beispiel sichtbar: Die Abbildungen \ref{fig:Rlidar_LOW} und \ref{fig:Raccel_HIGH} sind sich sehr ähnlich, obwohl zwei zunächst voneinander unabhängige Werte nacheinander in unterschiedliche Richtungen geändert werden: Die Kovarianz bzw. Varianz trifft -- wie bereits umrissen -- eine Aussage über die Streuung der Messwerte. Daraus folgt, dass sich das Filter bei einer Messrauschkovarianzmatrix $R_{x}$ mit kleineren Werten eher auf die Zuverlässigkeit der Messdaten des betreffenden Sensors verlassen kann als dies bei größeren Werten in der Matrix der Fall wäre, wo eine höhere Kovarianz/Varianz auch gleichzeit einen höheren Rauschanteil bedeuten kann. In beiden Fällen ist der Verlauf der Höhe jedoch fast identisch zu Abbildung \ref{fig:KalmanHoehe_Lidar}, da der jeweils andere Sensor eine entsprechend niedrigere Varianz aufweißt (siehe Gl. \ref{eq:Messrauschkovarianzmatrix} und Gl. \ref{eq:Messrauschkovarianzmatrix_Lidar}), womit dem Filter wenigstens eine zuverlässige Datenquelle zur Verfügung steht.\\
+		% Raccel_LOW
+		\begin{figure}[!ht]
+			\subfloat[Höhe\label{subfig:Pos_Raccel_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Pos_Raccel_LOW.eps}
+			}
+			\hfill	
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Raccel_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Speed_Raccel_LOW.eps}
+			}
+			\caption{Filterverhalten bei niedrigem $R_{accel}$}
+			\label{fig:Raccel_LOW}
+		\end{figure}
+		
+		Die Darstellung des Filterverhaltens mit niedriger Varianz für die Messrauschkovarianzmatrix des Beschleunigungssensor (Abb. \ref{fig:Raccel_LOW}) weißt deutliche Ähnlichkeiten mit Abbildung \ref{fig:Rlidar_HIGH} auf: Die Höhe wird zu Beginn und Ende zwar gut aber nicht exakt geschätzt, ebenso ist ein größerer Rauschanteil in der Abbildung zur Geschwindigkeit (Abb. \ref{subfig:Speed_Raccel_LOW}) bemerkbar. Obwohl ein niedrigerer Wert in der Matrix die Zuverlässigkeit der Messdaten erhöht, wirkt sich dies hier scheinbar kontraproduktiv aus. Eine mögliche Erklärung dafür ist, dass - wie in Abbildung \ref{fig:KalmanBeschleunigung} sichtbar - die Messdaten des Beschleunigungssensor einen großen Rauschanteil besitzen (zusammen mit der hohen Messfrequenz von $200~Hz$) und deswegen dem Filter den Trugschluss vermitteln, diese Daten besäßen eine große Zuverlässigkeit und Genauigkeit. Durch den parallel wirkenden Einfluss des Abstandslasers, wird dennoch die Höhe relativ genau geschätzt.\\
+		% Q_HIGH
+		\begin{figure}[!ht]
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Q_HIGH}]{
+				\includegraphics[scale=0.5]{Mod/Speed_Q_HIGH.eps}
+			}
+			\hfill
+			\subfloat[Beschleunigung\label{subfig:Accel_Q_HIGH}]{
+				\includegraphics[scale=0.5]{Mod/Accel_Q_HIGH.eps}
+			}
+			\caption{Filterverhalten bei hohem $Q$}
+			\label{fig:Q_HIGH}
+		\end{figure}
+		% Q_LOW	
+		\begin{figure}[!ht]
+			\hfill	
+			\subfloat[Geschwindigkeit\label{subfig:Speed_Q_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Speed_Q_LOW.eps}
+			}
+			\subfloat[Beschleunigung\label{subfig:Accel_Q_LOW}]{
+				\includegraphics[scale=0.5]{Mod/Accel_Q_LOW.eps}
+			}
+			\caption{Filterverhalten bei niedrigem $Q$}
+			\label{fig:Q_LOW}
+		\end{figure}
+	
+		Wird die Prozessrauschkovarianzmatrix $Q$ geändert, die in dieser Filterimplementierung nur im Zusammenspiel mit der Varianz des Beschleunigungssensors (übersetzt: $R_{accel}$) wirkt, lassen sich zwei Verhaltensfälle beobachten: Abbildung \ref{fig:Q_HIGH} zeigt, dass dem Verlauf der Geschwindigkeit (Abb. \ref{subfig:Speed_Q_HIGH}) durch die Zustandsschätzungen sehr gut gefolgt wird, also auf Änderungen sehr dynamisch reagiert wird. Der geschätzte Zustand der Beschleunigung allerdings weißt stark erhöhtes Rauschen auf. Auf die Schätzung der Höhe hat dies jedoch scheinbar keine Auswirkungen, denn diese wird nach wie vor unverändert gut geschätzt.\\
+		Das umgekehrte Verhalten -- bei niedrigem $Q$ -- zeigt, dass Rauschen minimal und die Schätzung der Geschwindigkeit nahezu optimal durchgeführt wurden. Kleine bemerkbare Schwingungen in Abbildung \ref{subfig:Speed_Q_LOW} lassen vermuten, dass dieses Verhalten (geringes Rauschen) auf Kosten der Dynamik geht. Abbildung \ref{subfig:Accel_Q_LOW} demonstriert eindrucksvoll, wie der geschätzte Wert der Beschleunigung ebenfalls nahezu mit dem wahren Wert verschmilzt und noch vorhandes Rauschen (sichtbar in Abb. \ref{fig:KalmanBeschleunigung}) vollständig geglättet wurde.\\
+	\end{enumerate}
+
+	\item\textbf{Aufgabe:}\label{sub:Aufgabe2}\\ % Aufzählungssymbol fett
+	
+	Jetzt wird ein verkleinerter Systemzustand betrachtet, mit dem Ziel einer geringeren Rechenzeit. Dieser Trick wird in eingebetteten Systemen vewendet, da in diesen meist weniger Ressourcen für Berechnungen zur Verfügung stehen. Der Geschwindigkeitsvorteil wird später noch gezeigt. Für den verkleinerten Systemzustand gilt:
+	\begin{equation}\label{eq:Zustandsraum_verkleinert}
+		\vec{x}(k)=
+		\begin{pmatrix}
+		h(k)\\
+		v(k)
+		\end{pmatrix}
+	\end{equation}
+	Außerdem sollen die Messungen des Beschleunigungssensors nicht als Messung, sondern als Systemeingabe $u(k)$ verwendet werden. Damit entfällt der Updateschritt für die Daten des Beschleunigungssensors aus Aufgabe \ref{sub:Aufgabe1}. Das Zustandsraummodell für diese Version des Filters lässt sich damit wie folgt beschreiben:\\
+	\begin{equation}\label{eq:ZustandsraummodellAufgabe2}
+			x(k+1)=F\cdot \vec{x}(k) + \vec{G}\cdot u(k);~u(k) = y_{accel}(k)
+	\end{equation}
+	
+	Die Prozessrauschkovarianzmatrix $Q$ ist gegeben mit:
+	\begin{equation}
+		Q = \vec{G}\cdot R_{accel} \cdot \vec{G}^{T}
+	\end{equation}
+	
+	\begin{enumerate}[label=\textbf{\alph*})]
+		
+		\item \textbf{System Design}\label{subfig:Aufgabe2SystemDesign}\\
+		
+		Zunächst muss für den Zustandsraum $\vec{x}(k)$ (Gl. \ref{eq:Zustandsraum}) wieder die Zustandsmatrix $F$ bestimmt werden, sowie die Eingangsmatrix $\vec{G}$ (die nicht zwingend ein Vektor sein muss).\\
+		
+		Da der Updateschritt für die Beschleunigungsdaten -- wie eingangs erwähnt -- entfällt, verkleinert sich der Systemzustand. Die Gleichungen werden nun nach Schema Gl. \ref{eq:ZustandsraummodellAufgabe2} zusammengesetzt. Damit ergibt sich folgende Zustandsmatrix:
+		\begin{equation}\label{eq:ZustandsmatrixFverkleinert}
+			F =
+			\begin{pmatrix}
+			1 & \Delta t\\
+			0 & 1
+			\end{pmatrix}		
+		\end{equation}
+		Damit als Resultat die Gleichungen \ref{eq:Hoehe}-\ref{eq:Beschleunigung} entstehen, folgt für die Eingangsmatrix:
+		\begin{equation}\label{eq:EingangsmatrixG}
+			\vec{G} =
+			\begin{pmatrix}
+			\frac{1}{2}\Delta t^{2} \\
+			\Delta t
+			\end{pmatrix}		
+		\end{equation}
+		Eingesetzt in Gl. \ref{eq:ZustandsraummodellAufgabe2} ergebt sich damit die drei zugrundeliegenden Zustandsgleichungen.\\
+		
+		\item \textbf{Kalman Filter}\label{subsec:KalmanFilterAufgabe2}\\
+		
+		Bevor der Filter starten kann, sind weitere Gleichungen zu implementieren. Der verkleinerte Systemzustand resultiert teilweise in weniger Rechenschritten, so entfällt der eingangs erwähnte Updateschritt der Beschleunigungssensormessdaten, womit sich auch ein verkürzter Gesamtquellcode (MATLAB) ergibt. Erneut werden Matrizendeklarationen nicht mit aufgeführt. Im Unterschied zum Quellcode aus Aufgabe \ref{sub:Aufgabe1} wird hier auch die Integration des Abstandslaser in den Filterprozess demonstriert, die sich in beiden Filter-Versionen nicht unterscheidet. Der Filterprozess muss generell die Messfrequenzen der Sensoreingabequellen korrekt berücksichtigen. Der Beschleunigungssensor misst mit einer Frequenz von $200~Hz$ und der Abstandslaser mit $20~Hz$.\\
+		\begin{lstlisting}	
+		for ia = 1:length(y_accel)-1 % Laenge der Messwerte
+			%% Vorhersage betreffend des Systemstatus'
+			% Vorhersage System-Status mit neuem Zustandsraummodell:
+			x(:,ia+1) = F * x(:, ia) + G * (y_accel(ia)-9.81); % u(k) = y_accel(k) - Offset g
+			% Vorhersage Systemstatuskovarianz:
+			P = F * P * transpose(F) + Q;
+			
+			%% Update der Lidar Messungen:
+			if(time_accel(ia) >= time_lidar(il))
+				% Vorhersage Messungen:
+				z = H * x(:, ia+1);
+				% Einfliessen der Messdaten
+				v = y_lidar(il) - z;
+				
+				% Innovationskovarianz:
+				S = (H * P * transpose(H)) + R_lidar;
+				% Filter Gain (Kalman-Gain):
+				W = P * transpose(H) * inv(S);
+				
+				% Systemzustand updaten:
+				x(:,ia+1) = x(:, ia+1) + (W * v);
+				% Prozesskovarianzmatrix updaten:
+				P = (eye(2) - (W * H)) * P;
+				
+				% Increment lidar index
+				il = il + 1;
+			end
+		end
+		\end{lstlisting}
+		
+		Wird der Filter mit diesen Einstellungen und dem verkleinerten Systemzustand bzw. den leicht veränderten Gleichungen ausgeführt, ergeben sich nachfolgende graphischen Ausgaben:
+	\begin{figure}[!ht]
+		
+		\subfloat[Höhe\label{subfig:KalmanHoeheEmbedded}]{
+			\includegraphics[scale=0.5]{Position_Embedded.eps}
+		}
+		\subfloat[Geschwindigkeit\label{subfig:KalmanGeschwindigkeitEmbedded}]{
+			\includegraphics[scale=0.5]{Speed_Embedded.eps}
+		}
+		\newline
+		\centering
+				\subfloat[Beschleunigung\label{subfig:KalmanBeschleunigungEmbedded}]{
+			\includegraphics[scale=0.5]{Accel_Embedded.eps}
+		}
+		\caption{Filterverhalten mit verkleinertem Systemzustand}
+		\label{fig:FilterAufgabe2_VerkleinertAbbildungen}
+	\end{figure}
+	Die Darstellung der Höhe (Abb. \ref{subfig:KalmanHoeheEmbedded}) sowie der Geschwindigkeit (Abb. \ref{subfig:KalmanGeschwindigkeitEmbedded}) stimmen augenscheinlich mit den Abbildung \ref{fig:KalmanHoehe_Lidar} und \ref{fig:KalmanGeschwindigkeit_Lidar} überein. Lediglich die Abbildung der Beschleunigung (Abb. \ref{subfig:KalmanBeschleunigungEmbedded}) weißt im Mittelteil einen Ausschlag nach oben auf, der in der vorherigen Filterversion (Abb. \ref{fig:KalmanBeschleunigung}) nicht existiert.\\
+	
+	\item \textbf{Auswertung}\label{subfig:AuswertungAufgabe2}\\
+	
+	Als letztes soll eine Auswertung der mittleren Laufzeit der beiden Versionen des Kalman Filters aus Aufgabe \ref{sub:Aufgabe1} und dieser Aufgabe durchgeführt werden. Dafür werden jeweils die Zeiten von je 100 Iterationen der Filter gemittelt und miteinander verglichen. Damit ergeben sich die folgenden mittleren Laufzeiten:
+	\begin{equation}
+			t_{Filter_{1}}=(72\pm 29)~\mu s
+	\end{equation}
+	\begin{equation}
+			t_{Filter_{2}}=(47\pm 21)~\mu s
+	\end{equation}
+	Somit ist der Filter in der zweiten Version ($t_{Filter_{2}}$) um rund ein Drittel schneller als Version eins: Durch den verkleinerten Systemzustand entfallen eine ganze Reihe an Rechnungen, beispielsweise die Bestimmung des Filter-Gains aus den Daten des Beschleunigungssensors inklusive einer benötigten Invertierung der Matrix $S$ -- ein relativ aufwendiges Rechenverfahren --, welches in dieser Implementierung eingespart werden kann.
+	\end{enumerate}
+	\end{enumerate}
+\end{document}
