@@ -21,7 +21,7 @@
 \lstset{language=Matlab, keywordstyle=\color{RoyalBlue}, basicstyle=\scriptsize\ttfamily, commentstyle=\ttfamily\itshape\color{gray}, stringstyle=\ttfamily, showstringspaces=false, breaklines=true, frameround=ffff, frame=single, rulecolor=\color{black}, autogobble=true}
 
 \begin{document}
-	\title{Übungsaufgabe in Luft- und Raumfahrtlabor\\Kalman Filter Übung 2}
+	\title{Übungsaufgabe in Luft- und Raumfahrtlabor\\Linearer Kalman Filter}
 	\author{Stefan Lindörfer}
 	\maketitle{}
 Einführende Übung zum Kalmanfilter mit einem eindimensionalen Beispiel. Ausführlich aufbereitet um auch als Anleitung/Nachschlagewerk verwendet werden zu können.
@@ -148,7 +148,7 @@ Einführende Übung zum Kalmanfilter mit einem eindimensionalen Beispiel. Ausfü
 				100& 0 & 0
 				\end{pmatrix}
 		\end{equation}
-		Die Dimension der Matrix gleicht der von $H_{accel}$ -- es gibt drei Zustandsvariablen und nur eine Sensoreingabe. Die vom Lidar gemessene Höhe hat keine Auswirkungen auf die Beschleunigung oder die Geschwindigkeit, weswegen diese Felder eine $0$ enthalten. Sie kann teilweise auch als Regelungsgröße angesehen werden, da bisher aufgetretene Fehler durch Daten des Beschleunigungssensors so minimiert werden können. Da die rohen Messdaten des Lidars um das 100-fache größer ($cm$ in $m$) in das Filter gegeben werden, wird das Verhältnis des Zustandsvektors mit dem Faktor $100$ entsprechend angepasst.\\
+		Die Dimension der Matrix gleicht der von $H_{accel}$ -- es gibt drei Zustandsvariablen und nur eine Sensoreingabe. Die vom Lidar gemessene Höhe hat keine Auswirkungen auf die Beschleunigung oder die Geschwindigkeit, weswegen diese Felder eine $0$ enthalten. Die hinzukommenden Daten können als Verfeinerung des eigentlichen Ergebnisses angesehen werden, da bisher aufgetretene Fehler durch den Beschleunigungssensors so minimiert werden. Da die rohen Messdaten des Lidars um das 100-fache größer ($cm$ in $m$) in das Filter gegeben werden, wird das Verhältnis des Zustandsvektors mit dem Faktor $100$ entsprechend angepasst.\\
 		
 		Die Messrauschkovarianzmatrix des Abstandslasers $R_{lider}$ wird mit den Messdaten des Lidars genauso bestimmt wie bereits zu Beginn mit dem Beschleunigungssensor, lediglich die verringerte Messfrequenz von $20~Hz$ muss berücksichtigt werden. Damit ergibt sich ein Wert von
 		\begin{equation}\label{eq:Messrauschkovarianzmatrix_Lidar}
@@ -161,17 +161,17 @@ Einführende Übung zum Kalmanfilter mit einem eindimensionalen Beispiel. Ausfü
 		\begin{figure}[!ht]
 			\centering
 			\includegraphics[scale=0.8]{Position_Lidar.eps}
-			\caption{\label{fig:KalmanHoehe_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Höhe des Multikopters mit Eingabe des Abstandslasers}
+			\caption{\label{fig:KalmanHoehe_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Höhe des Multikopters mit Hinzunahme des Abstandslasers}
 		\end{figure}
 		\begin{figure}[!ht]
 			\centering
 			\includegraphics[scale=0.8]{Speed_Lidar.eps}
-			\caption{\label{fig:KalmanGeschwindigkeit_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Geschwindigkeit des Multikopters mit Eingabe des Abstandslasers}
+			\caption{\label{fig:KalmanGeschwindigkeit_Lidar}Darstellung des zeitlichen Verlaufes der vertikalen Geschwindigkeit des Multikopters mit Hinzunahme des Abstandslasers}
 		\end{figure}
 	
 		\item \textbf{Auswertung}\label{subsec:Auswertung}\\
 		
-		Sofort auffällig ist die Tatsache, dass das Filter, wie in Abbildung \ref{fig:KalmanHoehe_Lidar} ersichtlich, mit dem Abstandslaser als zusätzliche Orientierungsmöglichkeit, einen fast exakten Verlauf mit dem wahren Wert aufweist. Dies erreicht das Filter in Abbildung \ref{fig:KalmanHoehe} (wie bereits in Aufgabe \ref{subsec:Task1b} festegestellt) bei weitem nicht: Fehler werden dort aufsummiert und ergeben letztendlich fast die doppelte Höhe.\\
+		Sofort auffällig ist die Tatsache, dass das Filter wie in Abbildung \ref{fig:KalmanHoehe_Lidar} ersichtlich, mit dem Abstandslaser als zusätzliche Orientierungseingabe, einen fast exakten Verlauf mit dem wahren Wert aufweist. Dies erreicht das Filter in Abbildung \ref{fig:KalmanHoehe} (wie bereits in Aufg. \ref{subsec:Task1b} festegestellt) bei weitem nicht: Fehler werden dort aufsummiert und ergeben letztendlich fast die doppelte Höhe.\\
 		
 		Auch bei den beiden Abbildungen zur Geschwindigkeit (Abb. \ref{fig:KalmanGeschwindigkeit} und \ref{fig:KalmanGeschwindigkeit_Lidar}) lässt sich -- wenn auch in geringerem Maße -- eine solche Beobachtung feststellen. Hier weicht das Filter ohne Lidar, als zweite Sensoreingabequelle, vom wahren Wert in vergleichbarer Größenordnung ab. Auch eine langsamere Konvergenz zu diesem lässt sich ab der Hälfte der Zeit deutlich feststellen, währenddessen die zweite Version des Filters (siehe Abb. \ref{fig:KalmanGeschwindigkeit_Lidar}), ebenfalls -- mit leichtem Prozessrauschen zwar -- einen sehr konvergenten und dynamischen Verlauf um die Soll-Geschwindigkeit nimmt.\\
 		
@@ -392,7 +392,7 @@ Einführende Übung zum Kalmanfilter mit einem eindimensionalen Beispiel. Ausfü
 	\begin{equation}
 			t_{Filter_{2}}=(47\pm 21)~\mu s
 	\end{equation}
-	Somit ist der Filter in der zweiten Version ($t_{Filter_{2}}$) um rund ein Drittel schneller als Version eins: Durch den verkleinerten Systemzustand entfallen eine ganze Reihe an Rechnungen, beispielsweise die Bestimmung des Filter-Gains aus den Daten des Beschleunigungssensors inklusive einer benötigten Invertierung der Matrix $S$ -- ein relativ aufwendiges Rechenverfahren --, welches in dieser Implementierung eingespart werden kann.
+	Somit ist der Filter in der zweiten Version ($t_{Filter_{2}}$) im Mittel um rund ein Drittel schneller als Version eins: Durch den verkleinerten Systemzustand entfallen eine ganze Reihe an Rechnungen, beispielsweise die Bestimmung des Filter-Gains aus den Daten des Beschleunigungssensors inklusive einer benötigten Invertierung der Matrix $S$ -- ein relativ aufwendiges Rechenverfahren --, welches in dieser Implementierung eingespart werden kann.
 	\end{enumerate}
 	\end{enumerate}
 \end{document}
