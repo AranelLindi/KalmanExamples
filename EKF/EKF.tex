@@ -1,0 +1,212 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[left=2.80cm, right=2.80cm, top=2.50cm, bottom=2.00cm]{geometry}
+
+\usepackage{enumitem} % Ermöglicht Aufzählungsanzeiger fett zu schreiben (zusätzlich bei Aufzählung anzeigen!)
+
+\renewcommand{\footnotesize}{\fontsize{9pt}{12pt}\selectfont}
+
+\newcommand{\PA}[2]{\frac{\partial #1}{\partial #2}}
+
+
+\begin{document}
+	\title{Übungsaufgabe in Luft- und Raumfahrtlabor\\Erweiterter Kalman Filter}
+	\author{Stefan Lindörfer}
+	\maketitle{}
+	
+	In dieser Arbeit wird der erweiterte Kalman Filter behandelt, der -- im Unterschied zum linearen Kalman Filter -- auch nicht-lineare Zustände schätzen kann. Anhand eines einfachen Beispiels wird die Implementierung vorgeführt. Die wesentlichsten Unterschiede zwischen einem LKF und EKF ist die Art der Zustandsüberführung: Im erweiterten Kalman Filter erfolgt diese über eine Gleichung anstatt ausschließlich einer (linearen) Matrix. Außerdem wird die Kovarianzmatrix mit den partiellen Ableitungen des Zustandsraummodells berechnet. Gleiches gilt für den Korrekturschritt (Messgleichung).\\
+	
+	\section{Aufgabe}\label{sec:Aufgabe1}
+	Die zugehörige Aufgabenstellung beinhaltet eine Beschreibung des für ein Fahrzeug zu entwerfenden Filters. Als Eingaben werden hierzu ein Beschleunigungssensor (2-DoF), ein Drehratensensor (1-DoF) sowie ein Magnetkompass und ein GPS-Empfänger genutzt.\\
+	Das Zustandsraummodell wird durch die folgenden Gleichungen beschrieben:\\
+	\begin{align}
+		x_{N}(k+1)&=x_{N}(k)+v_{x,N}(k)\Delta t+\frac{1}{2}\bigg(\cos\big(\Theta_{N}(k)\big)a_{x,B}-\sin\big(\Theta_{N}(k)\big)a_{y,B}\bigg)\Delta t^{2}\label{eq:Zustand_x}\\
+		y_{N}(k+1)&=y_{N}(k)+v_{y,N}(k)\Delta t+\frac{1}{2}\bigg(\sin\big(\Theta_{N}(k)\big)a_{x,B}-\cos\big(\Theta_{N}(k)\big)a_{y,B}\bigg)\Delta t^{2}\label{eq:Zustand_y}\\
+		v_{x,N}(k+1)&=v_{x,N}+\bigg(\cos\big(\Theta_{N}(k)\big)a_{x,B}-\sin\big(\Theta_{N}(k)\big)a_{y,B}\bigg)\Delta t\label{eq:Zustand_vx}\\
+		v_{y,N}(k+1)&=v_{y,N}+\bigg(\sin\big(\Theta_{N}(k)\big)a_{x,B}-\cos\big(\Theta_{N}(k)\big)a_{y,B}\bigg)\Delta t\label{eq:Zustand_vy}\\
+		\Theta_{NB}(k+1)&=\Theta_{NB}(k)+\omega_{z,B}\Delta t\label{eq:Zustand_theta}
+	\end{align}
+	Damit folgt für den Systemzustandsvektor:
+	\begin{equation}\label{eq:Zustandsraum}
+		\vec{x}(k)=
+			\begin{pmatrix}
+			x_{N}\\
+			y_{N}\\
+			v_{x,N}\\
+			v_{y,N}\\
+			\Theta_{NB}
+		\end{pmatrix}
+	\end{equation}
+	\subsection{Linearisierung des nicht-linearen Zustandsraummodells}\label{subsec:Linearisierung}
+	Aus der Aufgabenstellung geht hervor: Wegen der hohen Samplerrate von jeweils $100~Hz$, sollen der Beschleunigungs- und Drehratensensor als Systemeingabe $u$ verwendet werden.
+	Zunächst soll das Zustandsraummodell linearisiert werden. Dafür ist die Jacobi-Matrix $F$ aus den Zustandsgleichungen (Gl. \ref{eq:Zustand_x}-\ref{eq:Zustand_theta}) aufzustellen:
+	\begin{equation}
+		f_{x}=F(k)=\frac{\partial f\big[k, \vec{x}(k)\big]}{\partial x}\Bigg \vert_{x=\hat{x}_{pos}(k)}
+	\end{equation}
+	Damit ergibt sich, unter Beachtung der eingangs festgestellten Bedingung, dass Systemeingänge mit verwendet werden:
+	\begin{gather}f_{x}(k)=
+		\begin{pmatrix}
+			\frac{\partial x_{N}}{\partial x_{N}} & \frac{\partial x_{N}}{\partial y_{N}} & \frac{\partial x_{N}}{\partial v_{x,N}} & \frac{\partial x_{N}}{\partial v_{y,N}} & \frac{\partial x_{N}}{\partial \Theta_{NB}} \\[0.5em]
+			\frac{\partial y_{N}}{\partial x_{N}} & \frac{\partial y_{N}}{\partial y_{N}} & \frac{\partial y_{N}}{\partial v_{x,N}} & \frac{\partial y_{N}}{\partial v_{y,N}} & \frac{\partial y_{N}}{\partial \Theta_{NB}} \\[0.5em]
+			\frac{\partial v_{x,N}}{\partial x_{N}} & \frac{\partial v_{x,N}}{\partial y_{N}} & \frac{\partial v_{x,N}}{\partial v_{x,N}} & \frac{\partial v_{x,N}}{\partial v_{y,N}} & \frac{\partial v_{x,N}}{\partial \Theta_{NB}} \\[0.5em]
+			\frac{\partial v_{y,N}}{\partial x_{N}} & \frac{\partial v_{y,N}}{\partial y_{N}} & \frac{\partial v_{y,N}}{\partial v_{x,N}} & \frac{\partial v_{y,N}}{\partial v_{y,N}} & \frac{\partial v_{y,N}}{\partial \Theta_{NB}} \\[0.5em]
+			\frac{\partial \Theta_{NB}}{\partial x_{N}} & \frac{\partial \Theta_{NB}}{\partial y_{N}} & \frac{\partial \Theta_{NB}}{\partial v_{x,N}} & \frac{\partial \Theta_{NB}}{\partial v_{y,N}} & \frac{\partial \Theta_{NB}}{\partial \Theta_{NB}}
+		\end{pmatrix}=
+		\begin{pmatrix}
+			1 & 0 & \Delta t & 0 & 0 \\[0.5em]
+			0 & 1 & 0 & \Delta t & 0 \\[0.5em]
+			0 & 0 & 1 & 0 & 0 \\[0.5em]
+			0 & 0 & 0 & 1 & 0 \\[0.5em]
+			0 & 0 & 0 & 0 & 1
+		\end{pmatrix}
+	\end{gather}
+	Die Zustandsmatrix $F$ muss nicht zwangsläufig einer Diagonalmatrix entsprechen, sondern ist abhängig vom verwendeten Zustandsmodell sowie den darin befindlichen Abhängigkeiten.
+	Um die Systemeingänge 
+	\begin{equation}\label{eq:Systemeingänge}
+		\vec{u}=\begin{pmatrix} a_{x,B} & a_{y,B} & \omega_{z,B} \end{pmatrix}^{T}
+	\end{equation}
+	in den Prozess mit einfließen zu lassen, wird -- ähnlich wie im linearen Kalman Filter -- eine Transformationsmatrix $f_{u}$ nach dem gleichen Prinzip aufgestellt:
+	\begin{equation}
+		f_{u}=G(k)=\frac{\partial f\big[k, \vec{u}(k)\big]}{\partial x}\Bigg \vert_{x=\hat{x}_{pos}(k)}
+	\end{equation}	
+	Die in den Gleichungen des Zustandsraummodells (Gl. \ref{eq:Zustand_x}-\ref{eq:Zustand_theta}) ersichtlichen zeitlichen Abhängigkeiten im Bereich der Beschleunigung fließen (aufgrund des Systemeinganges) nicht wie vielleicht erwartet in $f_{x}$ sondern in $f_{u}$ mit ein. Hier wird zunächst auch die vereinfachte Annahme getroffen, dass die Winkelgeschwindigkeit $\omega_{z,B}$ unabhängig von der Beschleunigung in $x$- oder $y$-Richtung ist, die betreffenden Ableitung in $F_{U}$ also gleich Null gesetzt werden. Tatsächlich ist dies nicht der Fall, da eine ungleiche Beschleunigung ebenfalls eine Drehung hervorrufen kann. Die Beachtung dieser Gesetzmäßigkeit würde aber den Rahmen dieses Beispiels sprengen.\\
+	\begin{gather}\label{eq:Systemeingangstransformationsmatrix}
+		f_{u}(k)=
+		\begin{pmatrix}
+		\frac{\partial x_{N}}{\partial a_{x,B}} & \ldots & \frac{\partial x_{N}}{\partial \omega_{z,B}} \\
+		\vdots & \ddots & \vdots \\
+		\frac{\partial \Theta_{NB}}{\partial a_{x,B}} & \ldots & \frac{\partial \Theta_{NB}}{\partial \omega_{z,B}}
+		\end{pmatrix}=
+		\begin{pmatrix}
+			\frac{1}{2}\cos\big(\Theta_{NB}(k)\big)\Delta t^{2} & -\frac{1}{2}\sin\big(\Theta_{NB}(k)\big)\Delta t^{2} & 0 \\[0.5em]
+			\frac{1}{2}\sin\big(\Theta_{NB}(k)\big)\Delta t^{2} & \frac{1}{2}\cos\big(\Theta_{NB}(k)\big)\Delta t^{2} & 0 \\[0.5em]
+			\cos\big(\Theta_{NB}(k)\big)\Delta t & -\sin\big(\Theta_{NB}(k)\big)\Delta t & 0 \\[0.5em]
+			\sin\big(\Theta_{NB}(k)\big)\Delta t & \cos\big(\Theta_{NB}(k)\big)\Delta t & 0 \\[0.5em]
+			0 & 0 & \Delta t
+		\end{pmatrix}	
+	\end{gather}
+	Mit diesen Matrizen lässt sich nun die für den erweiterten Kalman Filter geltende Gleichung für die Zustandsüberführung konkret aufstellen:
+	\begin{equation}\label{eq:Zustandsüberführung}
+		\vec{x}(k+1)=f\big[k,\vec{x}(k), \vec{u}(k)\big]+\vec{v}_{u}=f_{x}\big[k, \vec{x}(k)\big]+f_{u}\big[k, \vec{u}(k)\big]+\vec{v}_{u}
+	\end{equation}
+	Der Vektor $\vec{v}_{u}$ enthält hierbei den Rauschanteil der Sensoren die über den Systemeingang einfließen. Da isotropes Rauschen der Sensoren in der Aufgabenstellung angegeben wird, ist der Rauschanteil für Sensoren mit zwei Komponenten jeweils gleich, womit sich $\vec{v}_{u}=\begin{pmatrix} v_{a} & v_{a} & v_{\omega} \end{pmatrix}^{T}$ ergibt.
+	In Gleichung \ref{eq:Zustandsüberführung} enthalten sind damit auch die Jacobi-Matrizen $F$ und $G$, die ausmultipliziert wieder die Ausgangsgleichungen des Zustandsraummodells (Gl. \ref{eq:Zustand_x}-\ref{eq:Zustand_theta}) ergeben.
+	
+	\subsection{Entwicklung der Funktionen zur Messvorhersage}\label{subsec:Messvorhersage}
+	Im erweiterten Kalman Filter können zur Messvorhersage ebenfalls (nicht-lineare) Funktionen verwendet werden. Die Vorgehensweise ist analog zur bereits erfolgten Linearisierung des Zustandsraummodells (siehe \ref{subsec:Linearisierung}):
+	\begin{equation}
+		y(k+1)=h\big[k, x(k)+w(k)\big]
+	\end{equation}
+	Zunächst müssen die entsprechenden Funktionen aufgestellt werden, z.B. um Messwerte in ein anderes (Navigations-)Frame zu transformieren. Anschließend wird die entsprechende Jacobi-Matrix gebildet:
+	\begin{equation}\label{eq:DefinitionMessvorhersageJacobiMatrix}
+		H=H(k+1)=\frac{\partial h\big[k+1,x(k+1)\big]}{\partial x}\Bigg\vert_{x=\hat{x}_{pri}(k+1)}
+	\end{equation}
+	\fbox{\parbox{\linewidth}{
+	Der Vollständigkeit halber sei hier noch erwähnt, dass eine Linearisierung auch mittels Taylor-Reihe
+	\begin{equation}
+		T_{n}=\sum_{k=0}\frac{f^{(k)}}{k!}(x-a)^{k}
+	\end{equation}
+	erfolgen kann. Für ein passendes $n$ (je nach Rechenleistung und benötigter Genauigkeit) kann eine Funktion somit linearisiert bzw. abgeschätzt werden und erreicht bei kleinem $\Delta t$ eine Annäherung an den tatsächlichen Funktionswert. Dabei kann es ratsam sein (bei z.B. nur kleinen Änderungen), für die Entwicklung durch eine Taylor-Reihe nicht die eigentliche Funktion zu verwenden, sondern eine ggf. bekannte Potenzreihe. Beispiel für $\sin(x)$ und $n=0$:
+	\begin{equation}
+		sin(x-a)=\sum_{k=0}^{\infty}\frac{(-1)^{k}(x-a)^{1+2k}}{(1+2k)!}\quad\rightarrow\quad T_{1}=\sum_{k=0}^{1}\frac{(-1)^{k}(x-a)^{1+2k}}{(1+2k)!}=(x-a)
+	\end{equation}
+	}}
+	\subsubsection{Messvorhersage GPS-Empfänger}\label{subsubsec:MessvorhersageGPS}
+	Die vom GPS gemessenen Werte dienen der Positionsbestimmung, wirken sich also in dieser Form nur auf $x_{N}$ und $y_{N}$ des Zustandsraumes aus. Prinzipiell könnten diese Daten auch für eine Geschwindigkeitsbestimmung genutzt werden.
+	Damit ergibt sich für die Messfunktionen des GPS-Empfängers:
+	\begin{align}
+		h_{GPS,x,k+1}&=x_{N,k+1}\\
+		h_{GPS,y,k+1}&=y_{N,k+1}
+	\end{align}
+	Immer inbegriffen ist auch ein Rauschanteil. Damit folgt nach Gl. \ref{eq:DefinitionMessvorhersageJacobiMatrix} sofort die entsprechende Messmatrix:
+	\begin{equation}
+		H_{GPS}=\begin{pmatrix}
+		\PA{h_{GPS,x}}{x_{N}} & \PA{h_{GPS,x}}{y_{N}} & \ldots & \PA{h_{GPS,x}}{\Theta_{NB}}\\[0.5em]
+		\PA{h_{GPS,y}}{x_{N}} & \PA{h_{GPS,y}}{y_{N}} & \ldots & \PA{h_{GPS,y}}{\Theta_{NB}}
+		\end{pmatrix}=
+		\begin{pmatrix}
+		1 & 0 & 0 & 0 & 0 \\[0.5em]
+		0 & 1 & 0 & 0 & 0
+		\end{pmatrix}			
+	\end{equation}
+	Diese besitzt grundsätzlich so viele Spalten wie es Systemzustände gibt. Die Anzahl an Zeilen entspricht den Eingängen/Komponenten der Sensormessung.
+	\subsubsection{Messvorhersage Magnetkompass}\label{subsubsec:MessvorhersageMagnetkompass}
+	Ähnlich eindeutig ist dies auch beim Magnetkompass: Dessen Eingabe ist der Winkel zwischen der Nordrichtung des festen Koordinatensystems $N$ und der $x$-Achse des Fahrzeuges. Damit wirkt er sich lediglich auf die Orientierung aus, könnte aber -- wie auch bereits GPS -- in Form der Ableitung zur Bestimmung von Winkelgeschwindigkeiten verwendet werden.\\
+	Für die Messfunktion ergibt sich:
+	\begin{equation}
+		h_{\Theta,k+1}=\Theta_{NB,k+1}
+	\end{equation}
+	Die entsprechende Messmatrix mit den unter \ref{subsubsec:MessvorhersageGPS} vorgestellten Regeln zur Abmessung und dem Prinzip der Jacobi-Matrix folgt dann daraus:
+	\begin{equation}
+		H_{\Theta}=\begin{pmatrix}
+		0 & 0 & 0 & 0 & 1
+		\end{pmatrix}		
+	\end{equation}
+	\subsection{Bestimmung der Prozessrauschkovarianzmatrix $Q$}\label{subsec:Prozessrauschkovarianzmatrix}
+	Um die Prozessrauschkovarianzmatrix $Q$ zu bestimmen, müssen zunächst die beiden Matrizen $U$ (Rauschen der Systemeingänge) und $F_{U}$ (Ableitung des Zustandsraummodells nach den Systemeingängen (Gl. \ref{eq:Systemeingänge})) wegen
+	\begin{equation}\label{eq:ZusammenhangProzessrauschkovarianzmatrix}
+		Q=F_{U}\cdot U\cdot F_{U}^{T}
+	\end{equation}
+	berechnet werden. Es gilt allerdings bereits:
+	\begin{equation}\label{eq:ZustandsmatrixAbhängigSystemeingänge}
+		F_{U}=\frac{\partial f\big[k, x(k), u(k)\big]}{\partial u}=G=
+		\begin{pmatrix}
+		\frac{\partial x_{N}}{\partial a_{x,B}} & \ldots & \frac{\partial x_{N}}{\partial \omega_{z,B}} \\
+		\vdots & \ddots & \vdots \\
+		\frac{\partial \Theta_{NB}}{\partial a_{x,B}} & \ldots & \frac{\partial \Theta_{NB}}{\partial \omega_{z,B}}
+		\end{pmatrix}
+	\end{equation}
+	
+	Die Matrix für das Rauschen der Systemeingänge $U$ setzt sich aus den jeweiligen Varianzen der Sensoren zusammen. Da -- wie bereits erwähnt -- isotropes Rauschen angenommen wird, streuen die Messwerte beider Komponenten eines Sensors (hier: des Beschleunigungssensors) gleich, weswegen dessen zugehöriger Wert sowohl für die $x$- als auch die $y$-Achse eingetragen wird. Die Platzierung erfolgt in beide Richtungen gemäß dem Systemeingangsvektor $\vec{u}$.
+	\begin{equation}\label{eq:Messrauschkovarianzmatrix}U=
+		\begin{pmatrix}
+		\sigma_{a}^{2} & 0 & 0 \\
+		0 & \sigma_{a}^{2} & 0 \\
+		0 & 0 & \sigma_{\omega}^{2}
+		\end{pmatrix}		
+	\end{equation}
+	Mit diesen beiden Matrizen (Gl. \ref{eq:Systemeingänge} bzw. \ref{eq:ZustandsmatrixAbhängigSystemeingänge} und \ref{eq:Messrauschkovarianzmatrix}) kann $Q$ aus dem Zusammenhang Gl. \ref{eq:ZusammenhangProzessrauschkovarianzmatrix} berechnet werden. In der folgenden Rechnung werden Ableitungen, die eindeutig Null ergeben (siehe Gl. \ref{eq:Systemeingangstransformationsmatrix}) bereits als solche eingetragen. Außerdem wird aus Platzgründen kurzzeitig auf das vollständige Führen der entsprechenden Indizes verzichtet.\\
+	\begin{equation}
+		\begin{split}
+			Q&=
+			\footnotesize
+			\setlength{\arraycolsep}{1pt}
+			\medmuskip = -0.5mu%0.5mu
+			\begin{pmatrix}
+				(\PA{x_{N}}{a_{x}}^{2}+\PA{x_{N}}{a_{y}}^{2})\sigma_{a}^{2} & (\PA{x_{N}}{a_{x}}\PA{y_{N}}{a_{x}}+\PA{x_{N}}{a_{y}}\PA{y_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{x_{N}}{a_{x}}\PA{v_{x}}{a_{x}}+\PA{x_{N}}{a_{y}}\PA{v_{x}}{a_{y}})\sigma_{a}^{2} & (\PA{x_{N}}{a_{x}}\PA{v_{y}}{a_{x}}+\PA{x_{N}}{a_{y}}\PA{v_{y}}{a_{y}})\sigma_{a}^{2} & 0 \\[0.5em]
+				(\PA{y_{N}}{a_{x}}\PA{x_{N}}{a_{x}}+\PA{y_{N}}{a_{y}}\PA{x_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{y_{N}}{a_{x}}^{2}+\PA{y_{N}}{a_{y}}^{2})\sigma_{a}^{2} & (\PA{y_{N}}{a_{x}}\PA{v_{x}}{a_{x}}+\PA{y_{N}}{a_{y}}\PA{v_{x}}{a_{y}})\sigma_{a}^{2} & (\PA{y_{N}}{a_{x}}\PA{v_{y}}{a_{x}}+\PA{y_{N}}{a_{y}}\PA{v_{y}}{a_{y}})\sigma_{a}^{2} & 0 \\[0.5em]
+				(\PA{v_{x}}{a_{x}}\PA{x_{N}}{a_{x}}+\PA{v_{x}}{a_{y}}\PA{x_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{v_{x}}{a_{x}}\PA{y_{N}}{a_{x}}+\PA{v_{x}}{a_{y}}\PA{y_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{v_{x}}{a_{x}}^{2}+\PA{v_{x}}{a_{y}}^{2})\sigma_{a}^{2} & (\PA{v_{x}}{a_{x}}\PA{v_{y}}{a_{x}}+\PA{v_{x}}{a_{y}}\PA{v_{y}}{a_{y}})\sigma_{a}^{2} & 0 \\[0.5em]
+				(\PA{v_{y}}{a_{x}}\PA{x_{N}}{a_{x}}+\PA{v_{y}}{a_{y}}\PA{x_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{v_{y}}{a_{x}}\PA{y_{N}}{a_{x}}+\PA{v_{y}}{a_{y}}\PA{y_{N}}{a_{y}})\sigma_{a}^{2} & (\PA{v_{y}}{a_{x}}\PA{v_{x}}{a_{x}}+\PA{v_{y}}{a_{y}}\PA{v_{x}}{a_{y}})\sigma_{a}^{2} & (\PA{v_{y}}{a_{x}}^{2}+\PA{v_{y}}{a_{y}}^{2})\sigma_{a}^{2} & 0 \\[0.5em]
+				0 & 0 & 0 & 0 & \PA{\Theta_{N}}{\omega_{z}}^{2}\sigma_{\omega}^{2}
+			\end{pmatrix}\\[1em]
+			&=
+			\begin{pmatrix}
+				\frac{\Delta t^{4}}{4}\sigma_{a}^{2} & 0 & \frac{\Delta t^{3}}{2}\sigma_{a}^{2} & 0 & 0 \\[0.5em]
+				0 & \frac{\Delta t^{4}}{4}\sigma_{a}^{2} & 0 & \frac{\Delta t^{3}}{2}\sigma_{a}^{2} & 0 \\[0.5em]
+				\frac{\Delta t^{3}}{2}\sigma_{a}^{2} & 0 & \Delta t^{2}\sigma_{a}^{2} & 0 & 0 \\[0.5em]
+				0 & \frac{\Delta t^{3}}{2}\sigma_{a}^{2} & 0 & \Delta t^{2}\sigma_{a}^{2} & 0 \\[0.5em]
+				0 & 0 & 0 & 0 & \Delta t^{2}\sigma_{\omega}^{2}
+			\end{pmatrix}\\[1em]
+		\end{split}
+		\label{eq:Prozessrauschkovarianzmatrix}
+	\end{equation}
+	\subsection{Bestimmung der Messrauschkovarianzmatrizen $R_{GPS}$ \& $R_{\Theta}$}\label{subsec:Messrauschkovarianzmatrizen}
+	Im letzten Schritt soll das Messrauschen des GPS-Empfängers und des Magnetkompasses bestimmt werden. Generell setzt sich die Messrauschkovarianzmatrix $R$ aus den Varianzen der jeweiligen Sensoren zusammen. Da in diesem Fall die beiden Sensoren unterschiedliche Samplerraten (Frequenz) besitzen, also nicht in jeder Filter-Iteration aktuelle Messwerte aller Sensoren verfügbar sind und somit getrennt in das Filter einfließen, wird $R$ auf mehrere Matrizen aufgeteilt. Diese sind stets quadratisch angeordnet auf Basis der Anzahl Sensormesswerte und bei unkorreliertem Rauschen diagonal befüllt. Damit folgen:
+	\begin{equation}
+		R_{GPS}=
+		\begin{pmatrix}
+		\sigma_{GPS}^{2} & 0 \\[0.5em]
+		0 & \sigma_{GPS}^{2}
+		\end{pmatrix}\qquad\qquad
+		R_{\Theta}=
+		\begin{pmatrix}
+		\sigma_{\Theta}^{2}
+		\end{pmatrix}
+	\end{equation}
+\end{document}
