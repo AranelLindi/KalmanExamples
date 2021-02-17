@@ -118,6 +118,8 @@ Q = Fu * U * Fu';
 for k=1:length(time)-1
     %% State prediction
     % Auxiliary variables
+    % Werte aus der k-Iteration werden benötigt (siehe unten) um neue Werte
+    % für k+1 zu berechnen:
     q0 = x(1,k);
     q1 = x(2,k);
     q2 = x(3,k);
@@ -135,8 +137,8 @@ for k=1:length(time)-1
     x(3,k+1)  = q2 + 1/2 * (q3*wx+q0*wy-q1*wz)*dt(k);
     x(4,k+1)  = q3 + 1/2 * (-q2*wx+q1*wy+q0*wz)*dt(k);
     x(5,k+1)  = gyro(1,k)-xgx; % Neue Messwerte von Gyro abholen und Bias abziehen
-    x(6,k+1)  = gyro(2,k)-xgy; % "" 
-    x(7,k+1)  = gyro(3,k)-xgz; % "" 
+    x(6,k+1)  = gyro(2,k)-xgy; % Wichtig! Da hier Messwerte abgeholt werden, muss in Fx der Systemeingang nicht gesetzt werden
+    x(7,k+1)  = gyro(3,k)-xgz; % "   " 
     x(8,k+1)  = xgx; % Bleibt konstant
     x(9,k+1)  = xgy; % ""
     x(10,k+1) = xgz; % ""
@@ -166,20 +168,20 @@ for k=1:length(time)-1
     q3 = x(4,k+1);
     
     %% Measurement Update
-    % Rotationmatrix from navigation to body frame
-    R_nb = [q0^2+q1^2-q2^2-q3^2, 2*(q1*q2-q0*q3), 2*(q0*q2+q1*q3); ...
+    % Rotationmatrix from body frame to navigation frame
+    R_bn = [q0^2+q1^2-q2^2-q3^2, 2*(q1*q2-q0*q3), 2*(q0*q2+q1*q3); ...
             2*(q1*q2+q0*q3), (q0^2-q1^2+q2^2-q3^2), 2*(q2*q3-q0*q1); ...
             2*(q1*q3-q0*q2), 2*(q0*q1+q2*q3), (q0^2-q1^2-q2^2+q3^2)]; 
         
-    % Rotationmatrix from body to navigation frame
-    R_bn = R_nb';
+    % Rotationmatrix from navigation to body frame
+    R_nb = R_bn';
 
     %% Accelerometer
     % Accelerometer measurement yacc
     yacc = acc(:,k);
     % Non-linear measurement prediciton of accelerometer zacc
     % Estimate gravitational vector as measured in the body frame
-    zacc = R_bn * yacc;
+    zacc = R_nb * yacc;
 
     % Jacobian of zacc = hacc(x): Hacc      %3x10
     Hacc = [2*q2 -2*q3 2*q0 -2*q1 0 0 0 0 0 0; ...
@@ -251,7 +253,7 @@ quat = x(1:4,:)';
 [y_true, p_true, r_true] = quat2euler(true_q);
 
 figure(2);
-subplot(2,1,1);
+subplot(3,1,1);
 plot(time, [y_ekf, p_ekf, r_ekf], 'LineWidth', 2)
 grid on;
 xlabel('Zeit [s]');
@@ -267,7 +269,7 @@ ylabel('YPR [°]');
 title('Wahrer Wert');
 legend('Yaw', 'Pitch', 'Roll');
 
-subplot(2,1,2);
+subplot(3,1,3);
 plot(time, [y_ekf, p_ekf, r_ekf] - [y_true, p_true, r_true], 'LineWidth', 2)
 grid on;
 xlabel('Zeit [s]');
