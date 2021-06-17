@@ -22,9 +22,9 @@
 	\author{Stefan Lindörfer}
 	\maketitle{}
 	
-	In dieser Aufgabe soll das bereits verwendete Konzept des erweiterten Kalman Filters auf das mathematische Konstrukt von Quaternionen als Orientierungsmodell ausgedehnt werden. Quaternionen bieten unter anderem den Vorteil, dass bei ihrer Beschreibung keine Singularitäten (z.B. Gimbal Lock bei Euler-Winkel) auftreten können. Ein Nachteil ist jedoch die schwere Lesbarkeit, weshalb sie zu Anschauungszwecken in Tait-Bryan-Winkel umgerechnet werden.\\
+	In dieser Aufgabe soll das bereits verwendete Konzept des erweiterten Kalman Filters auf das mathematische Konstrukt der Quaternionen als Orientierungsmodell ausgedehnt werden. Quaternionen bieten unter anderem den Vorteil, dass bei ihrer Beschreibung keine Singularitäten (z.B. Gimbal Lock bei Euler-Winkel) auftreten können. Ein Nachteil ist jedoch die Lesbarkeit, weshalb sie hier zu Anschauungszwecken in Tait-Bryan-Winkel umgerechnet werden.\\
 	
-	Die 3-dimensionale Lage eines Multikopters soll durch ein QEKF geschätzt werden. Es stehen drei Sensoren als Eingabe zur Verfügung: Beschleunigungssensor, Gyroskop und Magnetometer.\\
+	Die drei-dimensionale Lage eines Multikopters soll durch ein QEKF geschätzt werden. Es stehen drei Sensoren zur Verfügung: Beschleunigungssensor, Gyroskop und Magnetometer.\\
 	
 	Das Zustandsraummodell setzt sich aus dem zehn dimensionalen Vektor
 	\begin{equation}\label{eq:Zustandsraummodell}
@@ -32,15 +32,19 @@
 		q_{NB}(k) & \omega_{B}(k) & x_{g}(k)
 		\end{pmatrix}^{T}
 	\end{equation}
-	zusammen. Dabei ist $q_{NB}(k)$ das vier-dimensionale Lagequaternion, $\omega_{B}(k)$ die drei-dimensionale Drehgeschwindigkeit und $x_{g}(k)$ der ebenfalls drei Dimensionen beinhaltene Gyroskopbias, der mit geschätzt werden soll. Das Gyroskop wird hierbei als Systemeingang verwendet. Weiterhin wird ein North-East-Down Koordinatensystem genutzt. Die Umrechnung von Navigationsframe $N$ in Bodyframe $B$ (und umgekehrt) erfolgt durch entsprechende Rotationsmatrizen. Ein Quaternion $q$ wird dargestellt als
+	zusammen. Dabei ist $q_{NB}(k)$ das vier-dimensionale Lagenquaternion, $\omega_{B}(k)$ die drei-dimensionale Drehgeschwindigkeit und $x_{g}(k)$ der ebenfalls drei Dimensionen beinhaltende Gyroskopbias, der aufgrund seines potenziell starken Einflusses mit geschätzt werden soll. Das Gyroskop wird hierbei als Systemeingang verwendet. Weiterhin wird ein North-East-Down Koordinatensystem genutzt. Die Umrechnung von Navigationsframe $N$ in Bodyframe $B$ (und umgekehrt) erfolgt durch entsprechende Rotationsmatrizen. Ein Quaternion $q$ wird dargestellt als
 	\begin{equation}\label{eq:QuaternionDarstellung}
 		\textbf{q}=q_{0}+q_{1}\cdot i+q_{2}\cdot j+q_{3}\cdot k\triangleq \begin{pmatrix}
 		q_{0} & q_{1} & q_{2} & q_{3}
 		\end{pmatrix}^{T}		
 	\end{equation}
-	Die weiteren Rechenregeln mit Quaternionen werden hierbei nicht detaillierter erläutert, können jedoch leicht auf entsprechenden Quellen nachvollzogen werden.
+	Die weiteren Rechenregeln mit Quaternionen werden hierbei nicht detaillierter erläutert, können jedoch leicht auf entsprechenden Quellen nachvollzogen werden. Eine Ausnahme bildet aber die Tatsache, dass Rotationsänderungen nur bei normierten Quaternionen korrekt berechnet werden können und daher bei Änderungen, eine Normalisierung notwendig wird, sodass zwingend
+	\begin{equation}
+		\vert\vert \textbf{q}\vert\vert = \frac{1}{|\textbf{q}|}\cdot \textbf{q} \overset{!}{=}1,~|\textbf{q}|= \sqrt{q_{0}^{2}+q_{1}^{2}+q_{2}^{2}+q_{3}^{2}}
+	\end{equation}
+	gelten muss.
 	\section{Systemmodell}\label{sec:Systemmodell}
-	Zunächst ist ein vollständiges Systemmodell aufzustellen. Dabei wird nach einem Kochrezept aus der Übung vorgegangen. Es werden alle Informationen über das Zustandsraummodell, die Sensoren und erforderliche Transformationen zusammengetragen und anschließend für den Filter entsprechend aufbereitet, sodass die erforderlichen Gleichungen des Kalman Filters aufgestellt werden können.
+	Zunächst ist ein vollständiges Systemmodell aufzustellen. Dabei wird nach einem Kochrezept aus der Übung vorgegangen. Es werden alle Informationen über das Zustandsraummodell, die Sensoren und erforderlichen Transformationen zusammengetragen und anschließend für das Filter entsprechend aufbereitet, sodass die erforderlichen Gleichungen des Kalman Filters aufgestellt werden können.
 		\subsection{Sensormodell}\label{subsec:Sensormodell}
 		Die folgenden Gleichungen modellieren die Sensormessungen von Gyroskop (Index $g$), Magnetometer ($m$) und Accelerometer ($a$) im Bodyframe:
 		\begin{align}
@@ -51,7 +55,7 @@
 		Dabei ist $\omega_{B}$ die Rotationsgeschwindigkeit, $m_{B}$ das Magnetfeld, $a_{B}$ die Beschleunigung, $g_{B}$ die Erdbeschleunigung (hier: Offset), $x_{i}$ die Sensorbiaswerte für jeden Sensor und $v_{i}$ das Rauschen jeden Sensors.\\
 		Zudem existiert für jeden Sensor die entsprechende Varianz: $\sigma_{g}^{2}$, $\sigma_{m}^{2}$ und $\sigma_{a}^{2}$. Berechnet werden können diese über das Quadrat der Stichprobenstandardabweichung eines geeigneten Zeitintervalls (vorzugsweise mit Messwerten während des Fluges).
 		\subsection{Systemzustand $x$}\label{subsec:Systemzustand}
-		Das eingangs bereits kompakt dargestellte Systemzustandsraummodell (Gl. \ref{eq:Zustandsraummodell}) ergibt ausführlich somit: 
+		Der eingangs bereits kompakt dargestellte Systemzustandsvektor (Gl. \ref{eq:Zustandsraummodell}) ergibt ausführlich somit: 
 		\begin{equation}\label{eq:Systemzustand}
 			\vec{x}(k)=\begin{pmatrix}
 			\left. \begin{array}{c}q_{0}(k)\\q_{1}(k)\\q_{2}(k)\\q_{3}(k)\end{array}\right\}\eqqcolon q_{NB}(k)\\[2.0em]
@@ -60,16 +64,16 @@
 			\end{pmatrix}
 		\end{equation}
 		\subsection{Systemeingang $u$ \& Messvektoren $y$}\label{subsec:Systemeingang&Messvektoren}
-		Das Gyroskop soll -- wie bereits erwähnt -- als Systemeingang verwendet werden, während das Accelerometer und das Magnetometer als Sensoreingabe einfließen. Alle der drei Sensoren liefern je einen Messwert für jede der drei Achsen ($x$, $y$ und $z$).\\
+		Das Gyroskop soll -- wie bereits erwähnt -- als Systemeingang verwendet werden, während das Accelerometer und das Magnetometer als Sensoreingabe einfließen. Alle drei Sensoren liefern je einen Messwert für jede der drei Achsen ($x$, $y$ und $z$).\\
 		Damit folgt aus den Gleichungen \ref{eq:Sensormodell1}-\ref{eq:Sensormodell3}, dass die Eingangsvektoren der Sensoren aus jeweils drei Zeilen bestehen.
 		\subsection{Systemmodell}\label{subsec:Systemmodell}
-		Die Zustandsänderungen für die nächste Filteriteration erfolgt bei Quaternionen über eine Integration der Änderungen mittels der Euler-Methode. Für die Änderung eines Quaternions $q$ gilt nach der Definition des Hamilton-Produktes für Quaternionen (Index $L$):
+		Die Zustandsänderungen für die nächste Filteriteration erfolgt bei Quaternionen über eine Integration der Änderungen mittels der Euler-Methode. Für die Änderung eines Quaternion $q$ gilt nach der Definition des Hamilton-Produktes für Quaternionen (Index $L$):
 		\begin{equation}\label{eq:AbleitungQuaternion}
 			\dot q =\frac{1}{2}\cdot \begin{pmatrix}\textbf{q}\end{pmatrix}_{L}\cdot \begin{pmatrix}0\\\omega_{B}\end{pmatrix}
 		\end{equation}
 		Damit folgt nach Gleichung \ref{eq:AbleitungQuaternion} und nach Ersetzung von $\big(\begin{smallmatrix*}
 		\textbf{q}
-		\end{smallmatrix*}\big)_{L}$ durch die entsprechende Matrixdarstellung des Quaternions für diesen Teil des Zustandsraummodells:
+		\end{smallmatrix*}\big)_{L}$ durch die entsprechende Matrixdarstellung des Quaternion für diesen Teil des Zustandsraummodells:
 		\begin{equation}\label{eq:ZustandsgleichungQuaternionAllgemein}
 			q_{NB}(k+1)=q_{NB}(k)+\frac{1}{2}\cdot \dot{q}_{NB}(k)\cdot \Delta t=\frac{1}{2}\cdot \begin{pmatrix}
 			q_{0 }& -q_{1} & -q_{2} & -q_{3} \\
@@ -84,7 +88,7 @@
 			\omega_{B_{z}}
 			\end{pmatrix}\cdot \Delta t
 		\end{equation}
-		Ausmultipliziert und auf die einzelnen Komponenten aufgeteilt ergibt sich damit:
+		Dabei meint $\Delta t$ die Zeit zwischen zwei aufeinanderfolgenden Filteriterationen. Ausmultipliziert und auf die einzelnen Komponenten aufgeteilt ergibt sich damit:
 		\begin{align}\label{eq:ZustandsgleichungQuaternionSpeziell}
 			q_{0}(k+1)&=q_{0}(k)+\frac{1}{2}\cdot \big(-(q_{1}\omega_{B_{x}}+q_{2}\omega_{B_{y}}+q_{3}\omega_{B_{z}})\big)\cdot \Delta t\\
 			q_{1}(k+1)&=q_{1}(k)+\frac{1}{2}\cdot \big(q_{0}\omega_{B_{x}}-q_{3}\omega_{B_{y}}+q_{2}\omega_{B_{z}}\big)\cdot \Delta t\\
@@ -92,7 +96,7 @@
 			q_{3}(k+1)&=q_{3}(k)+\frac{1}{2}\cdot \big(-q_{2}\omega_{B_{x}}+q_{1}\omega_{B_{y}}+q_{0}\omega_{B_{z}}\big)\cdot \Delta t
 		\end{align}
 		\\
-		Die Zustandsgleichungen für die Drehgeschwindigkeit $\omega_{B}$ lassen sich leichter berechnen und ergeben sich für die jeweilige Achse aus der Differenz von Gyroskopmessung und entsprechendem Bias (Gl. \ref{eq:ZustandsgleichungGyroskop2}). Hier muss also zwischen den Messwerten des Sensors und der letztendlich berechneten Drehrate unterschieden werden. Die Größe $\vec{\omega}_{B}$ ist Teil des Zustandsraummodells, während $\vec{y}_{g}$, also die Rohwerte des Gyroskops, Teil des Systemeingangs $u$ sind.
+		Die Zustandsgleichungen für die Drehgeschwindigkeit $\omega_{B}$ lassen sich leichter berechnen und ergeben sich für die jeweilige Achse aus der Differenz von Gyroskopmessung und entsprechendem Bias (Gl. \ref{eq:ZustandsgleichungGyroskop2}). Hier muss also zwischen den Messwerten des Sensors und der letztendlich berechneten Drehrate unterschieden werden. Die Größe $\vec{\omega}_{B}$ ist Teil des Zustandsraummodells, während $\vec{y}_{g}$, also die Rohwerte des Gyroskops, Teil des Systemeingangs $u$ ist.
 		\begin{align}
 			\vec{\omega}_{B}(k+1)&=\vec{u}(k)-\vec{x}_{g}(k)\label{eq:ZustandsgleichungGyroskop1}\\
 			&=\vec{y}_{g}(k)-\vec{x}_{g}(k)\label{eq:ZustandsgleichungGyroskop2}
@@ -133,7 +137,7 @@
 				0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1
 				\end{pmatrix}
 			\end{align}
-		Die Komponenten des Quaternions aus der vorherigen Iteration werden übernommen, sowie deren Änderungen aufintegriert. Der als konstant angenommene Bias wird unverändert aus dem Initialzustandswert (z.B. aus einer Kalibrierung) für den gesamten Filterprozess übernommen. Zur Berechnung der resultierenden Drehrate wird der Bias mit negativem Vorzeichen auf den Rohwert des Gyroskops addiert, der nachfolgend durch den Systemeingang hinzukommt.
+		Die Komponenten des Quaternion aus der vorherigen Iteration werden übernommen, sowie deren Änderungen integriert. Der als konstant angenommene Bias wird unverändert aus dem Initialzustandswert (z.B. aus einer Kalibrierung) für den gesamten Filterprozess übernommen. Zur Berechnung der resultierenden Drehrate wird der Bias mit negativem Vorzeichen auf den Rohwert des Gyroskops addiert, der nachfolgend durch den Systemeingang hinzukommt.
 			
 		Um die entsprechende Matrix für den Systemeingang aufstellen zu können, muss zunächst der Systemeingangsvektor $\vec{u}$ bestimmt werden. Dieser enthält die Rohwerte des Gyroskops, die eben im weiteren Verlauf noch um den Bias bereinigt werden müssen, bevor sie als Drehrate $\omega_{B}$ verwendet werden können. Dementsprechend folgt für $\vec{u}$:
 		\begin{equation}\label{eq:Systemeingangsvektor}
@@ -172,9 +176,9 @@
 		\end{equation}
 		Damit sind beide Matrizen bestimmt um die Zustandsvorhersage im Filter durchführen zu können:
 		\begin{equation}
-			\vec{x}(k+1)=f\big[k,\vec{x}(k),\vec{u}(k)\big]+\vec{v}(k)
+			\vec{x}(k+1)=f\big[k,\vec{x}(k),\vec{u}(k)\big]+\vec{v}(k)=\underbrace{f\big[k,\vec{x}(k)\big]}_{\substack{f_{x}\cdot \vec{x}(k)~\coloneqq}}+\underbrace{f\big[k,\vec{u}(k)\big]}_{\substack{f_{u}\cdot \vec{u}(k)~\coloneqq}}+\vec{v}(k)
 		\end{equation}
-		Die Zustandsvorhersage setzt sich also aus der Multiplikation von $f_{x}$ mit $x(k)$, plus der Multiplikation von $f_{u}$ mit $u(k)$ zusammen. Zusätzlich enthalten die Messungen des Systemeingangs einen Rauschanteil $\vec{v}$.
+		Die Zustandsvorhersage setzt sich also aus der Multiplikation von $f_{x}$ mit $x(k)$, plus der Multiplikation von $f_{u}$ mit $u(k)$ zusammen. Zusätzlich enthalten die Messungen des Systemeingangs einen Rauschanteil $\vec{v}(k)$.
 		\subsection{Modell zur Messvorhersage $h$ \& Messfunktionen $H$}\label{subsec:ModellMessvorhersage}
 		Als nächstes werden die Gleichungen zur Messvorhersage aufgestellt. Den Anfang macht der Beschleunigungssensor. Dessen gemessener Beschleunigungsvektor im Navigationsframe muss in das Bodyframe transformiert werden. Dies geschieht mittels folgender Gleichung:
 		\begin{equation}\label{eq:MessvorhersageBeschleunigungssensor}
@@ -228,8 +232,8 @@
 			\PA{h_{\psi}}{q_{3}}&=\frac{8\cdot q_{3}\cdot (q_{0}q_{3}+q_{1}q_{2})+2\cdot q_{0}\cdot (1-2\cdot (q_{2}^{2}+q_{3}^{2}))}{4\cdot (q_{0}q_{3}+q_{1}q_{2})^{2}+(1-2\cdot (q_{2}^{2}+q_{3}^{2}))^{2}}
 		\end{align}
 		\subsection{Prozessrauschkovarianzmatrix $Q$}
-		Die Prozessrauschkovarianzmatrix $Q$, die Rauschen \& Störungen zwischen zwei Filteriterationen beschreibt, lässt sich erneut mit dem bereits bekanntem Zusammenhang $Q=F_{U}\cdot U\cdot F_{U}^{T}$ berechnen. Dazu müssen also noch die beiden Matrizen $F_{U}$ und $U$ bestimmt werden.\\
-		Das Systemeingangsrauschen $U$ setzt sich -- wie bereits bekannt -- aus den Varianzen der Sensoren zusammen. Diese können leicht mit den Sensordaten berechnet werden. Die Varianz des Bias (näherungsweise konstant) wird deswegen sehr klein gewählt und auf 
+		Die Prozessrauschkovarianzmatrix $Q$, die Rauschen und Störungen zwischen zwei Filteriterationen beschreibt, lässt sich erneut mit dem bereits bekanntem Zusammenhang $Q=F_{U}\cdot U\cdot F_{U}^{T}$ berechnen. Dazu müssen also noch die beiden Matrizen $F_{U}$ und $U$ bestimmt werden.\\
+		Das Systemeingangsrauschen $U$ setzt sich -- wie bereits bekannt -- aus den Varianzen der Sensoren zusammen. Diese können leicht mit den Sensordaten berechnet werden. Die Varianz des Bias (näherungsweise konstant) wird sehr klein gewählt und auf 
 		\begin{equation}
 			\sigma_{x_{g}}^{2}=1.0\cdot 10^{-11}~(rad/s)^{2}
 		\end{equation}
@@ -295,8 +299,9 @@
 			\end{split}
 		\end{equation}
 		\subsection{Messrauschkovarianzmatrix $R$}
-		Zuletzt ist das Messrauschen zu bestimmen, welches eine Aussage über die Güte bzw. die Streuung von Messwerten eines Sensors (und damit auch deren Zuverlässigkeit) gibt. Die Dimensionierung der jeweiligen quadratischen Matrizen ist entsprechend der Anzahl der Komponenten des Sensors: So fließen Beschleunigungssensor mit drei Achsen mit ein, während das Magnometer indirekt über die Yaw-Winkel-Berechnung als Skalar eingebracht wird.\\
-		Zusammengesetzt wird die Matrix -- wie bereits auch in den vorherigen Übungen -- aus den Varianzen der Sensoren für die jeweilige Achse. Sofern kein korreliertes Rauschen vorliegt, ist die entsprechende Messrauschkovarianzmatrix stets eine Diagonalmatrix.  
+		Zuletzt ist das Messrauschen zu bestimmen, welches eine Aussage über die Güte bzw. die Streuung von Messwerten eines Sensors (und damit auch deren Zuverlässigkeit) gibt. Die Dimensionierung der jeweiligen quadratischen Matrizen ist entsprechend der Anzahl der Komponenten des Sensors: So fließt der Beschleunigungssensor mit drei Achsen ein, während das Magnetometer indirekt über die Yaw-Winkel-Berechnung als Skalar eingebracht wird.\\
+		Zusammengesetzt wird die Matrix -- wie bereits auch in den vorherigen Übungen -- aus den Varianzen der Sensoren für die jeweilige Achse bzw. der Varianz der Yaw-Winkel Berechnung, die separat bestimmt werden muss: Mit mehreren Werten des Magnetometers wird der Yaw-Winkel berechnet. Aus diesen Daten kann dann die Varianz bestimmt werden.\\
+		Sofern kein korreliertes Rauschen vorliegt, ist die entsprechende Messrauschkovarianzmatrix stets eine Diagonalmatrix.  
 		\begin{equation}
 			R_{a}=
 			\begin{pmatrix}
@@ -310,7 +315,7 @@
 			\end{pmatrix}
 		\end{equation}
 		\subsection{Gemeinsamer Korrekturschritt}
-		Für den Fall, dass die Samplerraten aller Sensoren gleich sind, zu jeder Filteriteration also ein aktueller Sensormesswert zur Verfügung steht, können die vorher aufgestellten Matrizen auch zusammengeführt werden, um nur einen einzigen Korrekturschritt im Filter durchführen zu müssen. Andernfalls müssen die Korrekturschritte aufgeteilt werden, wie dies in vorherigen Übungen der Fall war.\\
+		Für den Fall, dass die Samplerraten (Frequenzen) aller Sensoren gleich sind, zu jeder Filteriteration also je ein aktueller Messwert aller Sensoren zur Verfügung steht, können die vorher aufgestellten Matrizen auch zusammengeführt werden, um nur einen einzigen Korrekturschritt im Filter durchführen zu müssen. Andernfalls müssen die Korrekturschritte aufgeteilt werden, wie dies in vorherigen Übungen der Fall war.\\
 		Für den Fall eines einzigen Korrekturschrittes, setzen sich die finalen Matrizen wie folgt zusammen:
 		\begin{align}
 			y(k)&=\begin{pmatrix}
@@ -340,8 +345,8 @@
 			\theta_{Pitch,0}&=0,1320~rad\\
 			\psi_{Yaw,0}&=-0,3956~rad\\
 			\sigma_{a}^{2}&=0,2612~g^{2}\\
-			\sigma_{g}^{2}&=3,7636\cdot 10^{-4}~(rad/s)^{2}\\
-			\sigma_{yaw}^{2}&=0,4555~rad^{2}
+			\sigma_{g}^{2}&=0,0003~(rad/s)^{2}\\
+			\sigma_{yaw}^{2}&=0,2075~rad^{2}
 		\end{align}
 		Aus den drei Winkeln (Roll, Pitch und Yaw) ergibt sich darüber hinaus das folgende Quaternion als Startzustand:
 		\begin{equation}
@@ -353,7 +358,7 @@
 		\begin{equation}
 			\vec{x}_{g}=\begin{pmatrix}
 			0,0353 & 0,0399 & 0,0775
-			\end{pmatrix}^{T}
+			\end{pmatrix}^{T}~rad
 		\end{equation}
 		Zusammenfassend ergibt sich somit der folgende Startzustand $x_{0}$:
 		\begin{equation}
@@ -367,42 +372,43 @@
 		\end{equation}
 		angenommen werden, wobei $I_{n}$ die $(n\times n)$-Einheitsmatrix darstellt.
 		\section{Auswertung}
-		Mit den unter \ref{sec:Systemmodell} erarbeiteten Gleichungen und Matrizen kann nun das QEKF implementiert werden. Dazu liegt eine Sammlung von Messwerten vor um eine Simulation durchführen zu können. Abbildung \ref{fig:DatenSensoren} zeigt den Verlauf der Daten aller drei Sensoren, aufgeteilt auf die jeweils drei verschiedene Komponenten der Achsen.
+		Mit den unter \ref{sec:Systemmodell} erarbeiteten Gleichungen und Matrizen kann nun das QEKF implementiert werden. Dazu liegt eine Sammlung von Messwerten vor, um eine Simulation durchführen zu können. Abbildung \ref{fig:DatenSensoren} zeigt den Verlauf der Daten aller drei Sensoren, aufgeteilt auf die jeweils drei verschiedene Komponenten der Achsen.
 		\begin{figure}[!ht]
 			\hspace{-2cm}
 			\includegraphics[width=1.25\textwidth]{DatenSensoren.eps}
 			\caption{\label{fig:DatenSensoren}\centering Grafische Aufbereitung der Messdaten des Beschleunigungssensors, Gyroskops und Magnetometers}
 		\end{figure}
-		Die Implementierung erfolgt wie gehabt in MATLAB, unterschiedet sich jedoch nur gering von bisherigen Implementierungen und wird hier nicht näher erläutert.\\
+		Die Implementierung erfolgt wie gehabt in MATLAB, unterscheidet sich jedoch nur gering von bisherigen Implementierungen und wird hier nicht näher erläutert.\\
 		
 		Die erste durchgeführte Simulation mit den unter \ref{subsec:Anfangszustände} bestimmten Initialwerten ergibt die unter Abbildung \ref{fig:Initialsimulation} durchgeführten Ergebnisse.
 		\begin{figure}[!ht]
 			\hspace{-2cm}
 			\includegraphics[width=1.25\textwidth]{Initialsimulation.eps}
-			\caption{\label{fig:Initialsimulation}\centering Ergebnisse der Simulation des QEFK mit Initialwerten in $Q$ und $R$}
+			\caption{\label{fig:Initialsimulation}\centering Ergebnisse der Simulation des QEKF mit Initialwerten in $Q$ und $R$}
 		\end{figure}
 		Das Filter zeigt in Abbildung \ref{fig:Initialsimulation} schon von Beginn an eine recht gute Näherung an den wahren Wert und folgt dem weiteren Verlauf mit minimalen Abweichungen. Der Fehlerausschlag im mittleren Teil beweist eine nicht optimale Dynamik in Bezug auf Änderungen: Das Filter ist also stets dem wahren Verlauf etwas hinterher. Im folgenden soll durch eine Variation verschiedener Werte in $Q$ und $R$ das Filterverhalten untersucht und gegebenenfalls auch verbessert werden.\\
 		
-		Generell gilt zur Wahl von $Q$ und $R$, dass große Werte in der Prozessrauschkovarianzmatrix und kleine Werte im Messrauschen ein dynamischeres Filterverhalten erzeugen: Das Filter reagiert also schneller auf Änderungen. Dagegen bewirkt die umgekehrte Gestaltung -- kleine Werte in $Q$ und große in $R$ --, dass Rauschen gut unterdrückt wird, der Verlauf also geglättet wird und weniger Ausreißer aufweist -- auf Kosten der Dynamik.\\
+		Vorweg gilt im Allgemeinen zur Wahl von $Q$ und $R$, dass große Werte in der Prozessrauschkovarianzmatrix und kleine Werte im Messrauschen ein dynamischeres Filterverhalten erzeugen: Das Filter reagiert also schneller auf Änderungen. Dagegen bewirkt die umgekehrte Einstellung -- kleine Werte in $Q$ und große in $R$ --, dass Rauschen besser unterdrückt wird, der Verlauf also geglättet wird und weniger Ausreißer aufweist -- auf Kosten der Dynamik.\\
 		\begin{figure}[!ht]
 			\hspace{-2cm}
 			\includegraphics[width=1.25\textwidth]{QHigh.eps}
 			\caption{\label{fig:QHigh}\centering Filterverhalten und Abweichung bei hohen Werten in $Q$}
 		\end{figure}
 	
-		Werden die Werte der Prozessrauschkovarianzmatrix erhöht ($10^{6}\cdot Q$), wirkt sich dies im Filterprozess dahingehend aus, dass das Filter zwischen zwei aufeinanderfolgenden Berechnungsiterationen ein erhöhtes Rauschen des Systemzustands vermutet, das Zustandsraummodell betreffend der Systemeingänge (die von $Q$ eingeordnet werden) also unzuverlässig oder nicht vollständig ist. Dies ist im Hinblick auf die Verknüpfung mit dem Systemeingang dadurch bedingt, dass höheren Werten in $Q$ eine größere und niedrigeren eine geringere Unsicherheit in $\vec{u}$ attestiert wird. Die mit dieser erhöhten Prozessunsicherheit behafteten Größen fließen schließlich auch in die Berechnung des Lagequaternions mit ein. Abbildung \ref{fig:QHigh} zeigt dieses Verhalten. Insgesamt ist dabei erhöhtes Rauschen zu beobachten. Der Yaw-Winkel streut aus den o.g. Gründen und wegen des komplizierteren Mess- und Transformationsmodells, dass zudem auch noch mehrmals auf nicht-lineare Funktionen zurückgreift, deutlich stärker, als Roll und Pitch.\\
+		Werden die Werte der Prozessrauschkovarianzmatrix erhöht ($10^{6}\cdot Q$), wirkt sich dies im Filterprozess dahingehend aus, dass das Filter zwischen zwei aufeinanderfolgenden Berechnungsiterationen ein erhöhtes Rauschen des Systemzustands vermutet, das Zustandsraummodell betreffend der Systemeingänge (die von $Q$ eingeordnet werden) also unzuverlässig oder nicht vollständig ist. Dies ist im Hinblick auf die Verknüpfung mit dem Systemeingang dadurch bedingt, dass höheren Werten in $Q$ eine größere und niedrigeren eine geringere Unsicherheit in $\vec{u}$ attestiert wird.\\
+		Die mit dieser erhöhten Prozessunsicherheit behafteten Größen fließen schließlich auch in die Berechnung des Lagenquaternion mit ein. Abbildung \ref{fig:QHigh} zeigt dieses Verhalten. Wie vermutet ist dabei erhöhtes Rauschen zu beobachten. Der Yaw-Winkel streut aus den o.g. Gründen und wegen der höheren Volatilität der Messwerte (siehe Abbildung \ref{fig:DatenSensoren}, mittleres Bild, z-Achse) deutlich stärker, als Roll und Pitch.\\
 		\begin{figure}[!ht]
 			\hspace{-2cm}
 			\includegraphics[width=1.25\textwidth]{RLow.eps}
 			\caption{\label{fig:RLow}\centering Filterverhalten und Abweichung bei niedrigen Werten in $R$}
 		\end{figure}
 	
-		Ähnlich sieht der Verlauf aus, wenn $R$ niedrig gewählt wird ($10^{-6}\cdot R$). Abbildung \ref{fig:RLow} zeigt dieses Szenario. In diesem Fall wird die Güte der Messungen aus Beschleunigungssensor und Magnetometer vom Filter überschätzt, während das Prozessrauschen normal bleibt und auch die Daten des Gyroskops zuverlässig in das Modell einfließen. Deren starker Einfluss mindert vermutlich bei gleicher Verstärkung von $R$ das Rauschen im Vergleich zu Abbildung \ref{fig:QHigh}.\\
+		Ähnlich sieht der Verlauf aus, wenn $R$ niedrig gewählt wird ($10^{-6}\cdot R$). Abbildung \ref{fig:RLow} zeigt dieses Szenario. In diesem Fall wird die Güte der Messungen aus Beschleunigungssensor und Magnetometer vom Filter überschätzt, während das Prozessrauschen normal bleibt. Der normal wirkende Einfluss des Gyroskops mindert vermutlich bei gleicher Verstärkung von $R$ das Rauschen im Vergleich zu Abbildung \ref{fig:QHigh} etwas ab.\\
 
 		\begin{figure}[!ht]
 			\hspace{-2cm}
 			\includegraphics[width=1.25\textwidth]{RHigh.eps}
 			\caption{\label{fig:RHigh}\centering Filterverhalten und Abweichung bei hohen Werten in $R$}
 		\end{figure}
-		Abbildung \ref{fig:RHigh} zeigt das Verhalten des Filters für hohe Werte in $R$ ($10^{6}\cdot R$). Damit wird dem Filter mitgeteilt, dass die Messwerte der beiden Sensoren Accelerometer und Magnetometer insofern unzuverlässig sind, als das sie sehr breit streuen. Dementsprechend wird sich das Filter mehr auf das Zustandsraummodell mit Systemeingang Gyroskop verlassen -- welches von dieser Änderung nicht angesprochen wird. Auffällig ist in diesem Fall, dass im letzten Drittel der Simulation bei zwei Schätzkomponenten ein immer größer werdender Fehler aufsummiert wird. Die Ursache dafür könnte sein, dass mit dem Gyroskop lediglich eine Sensoreingabe mit annehmbarer Güte für den Filter zur Verfügung steht, während es die beiden anderen Sensoren mit sehr niedrigerer Gewichtung einfließen lässt, woraus eine Korrekturmöglichkeit entfällt, die früheren Implementierung zur Verfügung steht um Fehler zu korrigieren.
+		Abbildung \ref{fig:RHigh} zeigt das Verhalten des Filters für hohe Werte in $R$ ($10^{6}\cdot R$). Damit wird dem Filter mitgeteilt, dass die Messwerte der beiden Sensoren Accelerometer und Magnetometer insofern unzuverlässig sind, als das sie sehr breit streuen. Dementsprechend wird sich das Filter mehr auf das Zustandsraummodell mit Systemeingang Gyroskop verlassen -- welches von dieser Änderung nicht betroffen wird. Auffällig ist in diesem Fall, dass im letzten Drittel der Simulation bei zwei Schätzkomponenten ein immer größer werdender Fehler aufsummiert wird. Die Ursache dafür könnte sein, dass mit dem Gyroskop lediglich eine Sensoreingabe mit annehmbarer Unsicherheit für den Filter zur Verfügung steht, während es die beiden anderen Sensoren mit sehr niedrigerer Gewichtung einfließen lässt. Damit entfällt eine Korrekturmöglichkeit, die früheren Implementierung zur Verfügung steht, um Fehleinschätzungen zu korrigieren.
 \end{document}
